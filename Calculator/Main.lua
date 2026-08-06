@@ -1,33 +1,66 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local System=Context.Modules.CalculatorSystem
-local Project=Context.Modules.Project
+local Project = Context.Modules.Project
+local CalculatorSystem = Context.Modules.CalculatorSystem
 
-local Main={}
+local Main = {}
 
 function Main.Build(origin)
 
-	origin=origin or CFrame.new(0,5,0)
+	origin = origin or CFrame.new(0,5,0)
 
-	Project.Name="BABFT 16Bit Decimal Calculator"
+	Project.Name = "16Bit Calculator"
 
-	Project.Version="1.0.0"
+	Project.Version = "1.0.0"
 
-	Project.Author="coogy29"
+	Project.Author = "coogy29"
 
 	Project.SetRoot(origin)
 
-	local calculator=System.Build(
-		"CALCULATOR",
-		origin
-	)
+	local calculator
 
-	Context.Calculator=calculator
+	Project.Build(function()
+
+		calculator = CalculatorSystem.Build(
+
+			"CALCULATOR",
+
+			origin
+
+		)
+
+	end)
+
+	Context.Calculator = calculator
 
 	return calculator
 
 end
 
-Context.Modules.Calculator=Main
+function Main.BuildAt(position)
+
+	if typeof(position) == "Vector3" then
+
+		position = CFrame.new(position)
+
+	end
+
+	return Main.Build(position)
+
+end
+
+function Main.Rebuild()
+
+	Context:ClearObjects()
+
+	Context:ResetQueues()
+
+	Context:ResetStatistics()
+
+	return Main.Build()
+
+end
+
+Context.Modules.Calculator = Main
 
 return Main
