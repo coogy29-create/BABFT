@@ -1,95 +1,103 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local FullAdder=Context.Modules.FullAdder
-local Wiring=Context.Modules.Wiring
+local FullAdder = Context.Modules.FullAdder
 
-local Adder16={}
+local Adder16 = {}
 
-local function P(origin,x,z)
-	return origin*CFrame.new(x,0,z)
+local function P(origin, x, y, z)
+	return origin * CFrame.new(
+		x or 0,
+		y or 0,
+		z or 0
+	)
 end
 
-function Adder16.Build(name,origin)
+function Adder16.Build(name, origin)
+	local adders = {}
+	local sumBus = {}
+	local carryBus = {}
 
-	local adders={}
-	local sumBus={}
-	local carryBus={}
+	for bit = 0, 15 do
+		local column = bit % 4
+		local row = math.floor(bit / 4)
 
-	for bit=0,15 do
-
-		local adder=FullAdder.Build(
-			name.."_FA_"..bit,
-			P(origin,bit*24,0)
+		local adder = FullAdder.Build(
+			name .. "_BIT_" .. bit,
+			P(
+				origin,
+				column * 60,
+				0,
+				row * 34
+			)
 		)
 
-		adders[bit]=adder
-		sumBus[bit]=adder.Sum
-		carryBus[bit]=adder.Carry
-
+		adders[bit] = adder
+		sumBus[bit] = adder.Sum
+		carryBus[bit] = adder.Carry
 	end
 
-	for bit=0,14 do
+	for bit = 0, 14 do
+		adders[bit + 1].ConnectCarryIn(
+			carryBus[bit]
+		)
+	end
 
-		Wiring.Connect(
-			carryBus[bit],
-			name.."_FA_"..(bit+1).."_Cin"
+	local function connectABus(bus)
+		assert(
+			type(bus) == "table",
+			"A 입력 버스가 필요합니다."
 		)
 
-	end
-
-	function adders.ConnectABus(bus)
-
-		for bit=0,15 do
-
-			Wiring.Connect(
+		for bit = 0, 15 do
+			assert(
 				bus[bit],
-				name.."_FA_"..bit.."_HA1_A"
+				"A 입력 비트 누락: " .. bit
 			)
 
+			adders[bit].ConnectA(
+				bus[bit]
+			)
 		end
-
 	end
 
-	function adders.ConnectBBus(bus)
+	local function connectBBus(bus)
+		assert(
+			type(bus) == "table",
+			"B 입력 버스가 필요합니다."
+		)
 
-		for bit=0,15 do
-
-			Wiring.Connect(
+		for bit = 0, 15 do
+			assert(
 				bus[bit],
-				name.."_FA_"..bit.."_HA1_B"
+				"B 입력 비트 누락: " .. bit
 			)
 
+			adders[bit].ConnectB(
+				bus[bit]
+			)
 		end
-
 	end
 
-	function adders.ConnectCarryIn(source)
-
-		Wiring.Connect(
+	local function connectCarryIn(source)
+		assert(
 			source,
-			name.."_FA_0_Cin"
+			"Carry 입력이 필요합니다."
 		)
 
+		adders[0].ConnectCarryIn(source)
 	end
 
-	return{
-
-		Adders=adders,
-
-		Sum=sumBus,
-
-		CarryOut=carryBus[15],
-
-		ConnectABus=adders.ConnectABus,
-
-		ConnectBBus=adders.ConnectBBus,
-
-		ConnectCarryIn=adders.ConnectCarryIn
-
+	return {
+		Adders = adders,
+		Sum = sumBus,
+		Carry = carryBus,
+		CarryOut = carryBus[15],
+		ConnectABus = connectABus,
+		ConnectBBus = connectBBus,
+		ConnectCarryIn = connectCarryIn
 	}
-
 end
 
-Context.Modules.Adder16=Adder16
+Context.Modules.Adder16 = Adder16
 
 return Adder16
