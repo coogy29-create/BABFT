@@ -1,40 +1,48 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Config = Context.Config
 local Gates = Context.Modules.Gates
 local Adder16 = Context.Modules.Adder16
 local Register16 = Context.Modules.Register16
 
 local DecimalInput = {}
 
-local function P(origin, x, y, z)
-	return origin * CFrame.new(
-		x or 0,
-		y or 0,
-		z or 0
-	)
-end
-
 function DecimalInput.Build(name, origin)
 	local self = {}
 
+	local gateSpacing =
+		Config.Layout.GateSpacing
+
 	self.Zero = Gates.And(
 		name .. "_ZERO",
-		P(origin, 0, 0, 0)
+		origin
 	)
 
 	self.Register = Register16.Build(
 		name .. "_REGISTER",
-		P(origin, 20, 0, 0)
+		origin * CFrame.new(
+			gateSpacing,
+			0,
+			0
+		)
 	)
 
 	self.Multiply10Adder = Adder16.Build(
 		name .. "_MULTIPLY_10",
-		P(origin, 260, 0, 0)
+		origin * CFrame.new(
+			gateSpacing * 5,
+			0,
+			0
+		)
 	)
 
 	self.DigitAdder = Adder16.Build(
 		name .. "_DIGIT_ADDER",
-		P(origin, 520, 0, 0)
+		origin * CFrame.new(
+			gateSpacing * 8,
+			0,
+			0
+		)
 	)
 
 	self.ShiftLeft1 = {}
@@ -99,13 +107,16 @@ function DecimalInput.Build(name, origin)
 		for bit = 0, 3 do
 			assert(
 				digitBus[bit],
-				"숫자 입력 비트 누락: " .. bit
+				"숫자 입력 비트 누락: "
+					.. tostring(bit)
 			)
 
 			self.ExtendedDigit[bit] =
 				digitBus[bit]
 
-			self.DigitAdder.Adders[bit].ConnectB(
+			self.DigitAdder.Adders[
+				bit
+			].ConnectB(
 				digitBus[bit]
 			)
 		end
@@ -117,15 +128,21 @@ function DecimalInput.Build(name, origin)
 			"숫자 입력 클럭이 필요합니다."
 		)
 
-		self.Register.ConnectClock(source)
+		self.Register.ConnectClock(
+			source
+		)
 	end
 
-	self.Output = self.Register.Q
-	self.OutputInverse = self.Register.QB
+	self.Output =
+		self.Register.Q
+
+	self.OutputInverse =
+		self.Register.QB
 
 	return self
 end
 
-Context.Modules.DecimalInput = DecimalInput
+Context.Modules.DecimalInput =
+	DecimalInput
 
 return DecimalInput
