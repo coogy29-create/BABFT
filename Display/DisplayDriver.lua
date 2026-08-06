@@ -1,128 +1,313 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local Builder=Context.Modules.Builder
-local Wiring=Context.Modules.Wiring
-local Font=Context.Modules.Font5x7
+local Builder = Context.Modules.Builder
+local Gates = Context.Modules.Gates
+local Wiring = Context.Modules.Wiring
+local Config = Context.Config
 
-local DisplayDriver={}
+local DisplayDriver = {}
 
-local function P(origin,x,z)
-	return origin*CFrame.new(x,0,z)
+local FONT = {
+	[0] = {
+		"11111",
+		"10001",
+		"10001",
+		"10001",
+		"10001",
+		"10001",
+		"11111"
+	},
+
+	[1] = {
+		"00100",
+		"01100",
+		"00100",
+		"00100",
+		"00100",
+		"00100",
+		"01110"
+	},
+
+	[2] = {
+		"11111",
+		"00001",
+		"00001",
+		"11111",
+		"10000",
+		"10000",
+		"11111"
+	},
+
+	[3] = {
+		"11111",
+		"00001",
+		"00001",
+		"11111",
+		"00001",
+		"00001",
+		"11111"
+	},
+
+	[4] = {
+		"10001",
+		"10001",
+		"10001",
+		"11111",
+		"00001",
+		"00001",
+		"00001"
+	},
+
+	[5] = {
+		"11111",
+		"10000",
+		"10000",
+		"11111",
+		"00001",
+		"00001",
+		"11111"
+	},
+
+	[6] = {
+		"11111",
+		"10000",
+		"10000",
+		"11111",
+		"10001",
+		"10001",
+		"11111"
+	},
+
+	[7] = {
+		"11111",
+		"00001",
+		"00010",
+		"00100",
+		"01000",
+		"01000",
+		"01000"
+	},
+
+	[8] = {
+		"11111",
+		"10001",
+		"10001",
+		"11111",
+		"10001",
+		"10001",
+		"11111"
+	},
+
+	[9] = {
+		"11111",
+		"10001",
+		"10001",
+		"11111",
+		"00001",
+		"00001",
+		"11111"
+	}
+}
+
+local function P(origin, x, y, z)
+	return origin * CFrame.new(
+		x or 0,
+		y or 0,
+		z or 0
+	)
 end
 
-function DisplayDriver.Build(name,origin,digits)
+local function buildDigitDecoder(
+	name,
+	origin,
+	inputBus
+)
+	local inverted = {}
+	local values = {}
 
-	digits=digits or 5
+	for bit = 0, 3 do
+		inverted[bit] = Gates.Not(
+			name .. "_NOT_" .. bit,
+			P(origin, bit * 6, 0, 0)
+		)
 
-	local displays={}
-	local pixels={}
-
-	for d=1,digits do
-
-		displays[d]={}
-		pixels[d]={}
-
-		for row=1,7 do
-
-			pixels[d][row]={}
-
-			for col=1,5 do
-
-				local block=Builder.PlaceNamedBlock(
-					string.format(
-						"%s_D%d_R%d_C%d",
-						name,
-						d,
-						row,
-						col
-					),
-					"DisplayBlock",
-					P(
-						origin,
-						(d-1)*7+col,
-						(row-1)
-					)
-				)
-
-				pixels[d][row][col]=block
-				table.insert(
-					displays[d],
-					block
-				)
-
-			end
-
-		end
-
+		Wiring.Connect(
+			inputBus[bit],
+			inverted[bit]
+		)
 	end
 
-	function DisplayDriver.ConnectDigit(index,bus)
+	for value = 0, 9 do
+		local detector = Gates.And(
+			name .. "_VALUE_" .. value,
+			P(
+				origin,
+				value * 6,
+				0,
+				10
+			)
+		)
 
-		for bit=0,3 do
+		for bit = 0, 3 do
+			local enabled =
+				math.floor(value / (2 ^ bit)) % 2 == 1
 
 			Wiring.Connect(
-				bus[bit],
-				name..
-				"_DIGIT_"..
-				index..
-				"_BIT_"..
-				bit
+				enabled
+					and inputBus[bit]
+					or inverted[bit],
+				detector
 			)
-
 		end
 
+		values[value] = detector
 	end
 
-	function DisplayDriver.DrawCharacter(index,ch)
-
-		local pattern=Font.Get(ch)
-
-		for row=1,7 do
-
-			for col=1,5 do
-
-				if pattern[row]:sub(col,col)=="1" then
-
-					Wiring.Connect(
-						name..
-						"_DIGIT_"..
-						index..
-						"_BIT_ON",
-						pixels[index][row][col]
-					)
-
-				else
-
-					Wiring.Connect(
-						name..
-						"_DIGIT_"..
-						index..
-						"_BIT_OFF",
-						pixels[index][row][col]
-					)
-
-				end
-
-			end
-
-		end
-
-	end
-
-	return{
-
-		Digits=displays,
-
-		Pixels=pixels,
-
-		ConnectDigit=DisplayDriver.ConnectDigit,
-
-		DrawCharacter=DisplayDriver.DrawCharacter
-
+	return {
+		Values = values,
+		Inverted = inverted
 	}
-
 end
 
-Context.Modules.DisplayDriver=DisplayDriver
+function DisplayDriver.Build(
+	name,
+	origin,
+	digitCount
+)
+	digitCount = digitCount or 5
+
+	local result = {
+		Digits = {},
+		Decoders = {},
+		Pixels = {}
+	}
+
+	local function connectDigit(
+		digitIndex,
+		inputBus
+	)
+		assert(
+			type(inputBus) == "table",
+			"BCD 입력 버스가 필요합니다."
+		)
+
+		for bit = 0, 3 do
+			assert(
+				inputBus[bit],
+				"BCD 비트 누락: " .. bit
+			)
+		end
+
+		local digitOrigin = P(
+			origin,
+			(digitIndex - 1) * 90,
+			0,
+			0
+		)
+
+		local decoder = buildDigitDecoder(
+			name .. "_DIGIT_" .. digitIndex,
+			P(digitOrigin, 0, 0, -32),
+			inputBus
+		)
+
+		result.Decoders[digitIndex] = decoder
+		result.Pixels[digitIndex] = {}
+
+		for row = 1, 7 do
+			result.Pixels[digitIndex][row] = {}
+
+			for column = 1, 5 do
+				local pixelName = string.format(
+					"%s_D%d_R%d_C%d",
+					name,
+					digitIndex,
+					row,
+					column
+				)
+
+				local display = Builder.PlaceNamedBlock(
+					pixelName,
+					"DisplayBlock",
+					P(
+						digitOrigin,
+						column * 4,
+						(8 - row) * 4,
+						0
+					)
+				)
+
+				local whiteOutput = Gates.Or(
+					pixelName .. "_WHITE",
+					P(
+						digitOrigin,
+						column * 4,
+						(8 - row) * 4,
+						-12
+					)
+				)
+
+				local blackOutput = Gates.Not(
+					pixelName .. "_BLACK",
+					P(
+						digitOrigin,
+						column * 4,
+						(8 - row) * 4,
+						-20
+					)
+				)
+
+				Context:QueuePaint({
+					Object = whiteOutput,
+					Color = Config.Colors.White
+				})
+
+				Context:QueuePaint({
+					Object = blackOutput,
+					Color = Config.Colors.Black
+				})
+
+				for value = 0, 9 do
+					if FONT[value][row]:sub(
+						column,
+						column
+					) == "1" then
+						Wiring.Connect(
+							decoder.Values[value],
+							whiteOutput
+						)
+					end
+				end
+
+				Wiring.Connect(
+					whiteOutput,
+					blackOutput
+				)
+
+				Wiring.Connect(
+					whiteOutput,
+					display
+				)
+
+				Wiring.Connect(
+					blackOutput,
+					display
+				)
+
+				result.Pixels[digitIndex][row][column] = {
+					Display = display,
+					White = whiteOutput,
+					Black = blackOutput
+				}
+			end
+		end
+	end
+
+	result.ConnectDigit = connectDigit
+
+	return result
+end
+
+Context.Modules.DisplayDriver = DisplayDriver
 
 return DisplayDriver
