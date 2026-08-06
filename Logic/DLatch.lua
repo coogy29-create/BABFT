@@ -1,52 +1,53 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Config = Context.Config
 local Gates = Context.Modules.Gates
 local Wiring = Context.Modules.Wiring
 
 local DLatch = {}
 
-local function P(origin, x, y, z)
-	return origin * CFrame.new(
-		x or 0,
-		y or 0,
-		z or 0
+local function L(origin, index, depth)
+	return Config.Layout.GetLayeredCFrame(
+		origin,
+		index,
+		depth or 0
 	)
 end
 
 function DLatch.Build(name, origin)
 	local notData = Gates.Not(
 		name .. "_NOT_DATA",
-		P(origin, 0, 0, 12)
+		L(origin, 0)
 	)
 
 	local setGate = Gates.And(
 		name .. "_SET",
-		P(origin, 14, 0, 0)
+		L(origin, 1)
 	)
 
 	local resetGate = Gates.And(
 		name .. "_RESET",
-		P(origin, 14, 0, 16)
+		L(origin, 2)
 	)
 
 	local qOr = Gates.Or(
 		name .. "_Q_OR",
-		P(origin, 30, 0, 0)
+		L(origin, 3)
 	)
 
 	local q = Gates.Not(
 		name .. "_Q",
-		P(origin, 44, 0, 0)
+		L(origin, 4)
 	)
 
 	local qbOr = Gates.Or(
 		name .. "_QB_OR",
-		P(origin, 30, 0, 16)
+		L(origin, 5)
 	)
 
 	local qb = Gates.Not(
 		name .. "_QB",
-		P(origin, 44, 0, 16)
+		L(origin, 6)
 	)
 
 	Wiring.Connect(
