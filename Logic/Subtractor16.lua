@@ -1,25 +1,27 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Config = Context.Config
 local Gates = Context.Modules.Gates
 local Adder16 = Context.Modules.Adder16
 local Wiring = Context.Modules.Wiring
 
 local Subtractor16 = {}
 
-local function P(origin, x, y, z)
-	return origin * CFrame.new(
-		x or 0,
-		y or 0,
-		z or 0
-	)
-end
-
 function Subtractor16.Build(name, origin)
 	local self = {}
 
+	local gateSpacing =
+		Config.Layout.GateSpacing
+
+	local layerHeight =
+		Config.Layout.LayerHeight
+
+	local layerCount =
+		Config.Layout.LayerCount
+
 	self.Adder = Adder16.Build(
 		name .. "_ADDER",
-		P(origin, 0, 0, 28)
+		origin
 	)
 
 	self.BXor = {}
@@ -28,17 +30,23 @@ function Subtractor16.Build(name, origin)
 	self.CarryOut = self.Adder.CarryOut
 
 	for bit = 0, 15 do
-		local column = bit % 4
-		local row = math.floor(bit / 4)
+		local layer =
+			bit % layerCount
+
+		local column =
+			math.floor(bit / layerCount)
+
+		local xorOrigin =
+			origin
+			* CFrame.new(
+				(column + 3) * gateSpacing,
+				layer * layerHeight,
+				0
+			)
 
 		local xorGate = Gates.Xor(
 			name .. "_B_XOR_" .. bit,
-			P(
-				origin,
-				column * 60,
-				0,
-				row * 36
-			)
+			xorOrigin
 		)
 
 		self.BXor[bit] = xorGate
@@ -66,7 +74,8 @@ function Subtractor16.Build(name, origin)
 		for bit = 0, 15 do
 			assert(
 				bus[bit],
-				"B 입력 비트 누락: " .. bit
+				"B 입력 비트 누락: "
+					.. tostring(bit)
 			)
 
 			Wiring.Connect(
@@ -89,7 +98,9 @@ function Subtractor16.Build(name, origin)
 			)
 		end
 
-		self.Adder.ConnectCarryIn(source)
+		self.Adder.ConnectCarryIn(
+			source
+		)
 	end
 
 	return self
