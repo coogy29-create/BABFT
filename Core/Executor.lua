@@ -4,8 +4,8 @@ local Config = Context.Config
 local Utils = Context.Modules.Utils
 local Builder = Context.Modules.Builder
 local Binder = Context.Modules.Bind
-local Paint = Context.Modules.Paint
 local Property = Context.Modules.Property
+local Paint = Context.Modules.Paint
 
 local Executor = {}
 
@@ -19,8 +19,8 @@ local function resolveCFrame(data)
 	end
 
 	error(
-		"CFrame 또는 Position이 없습니다: "
-		.. tostring(data.Name)
+		"설치 좌표가 없습니다: "
+			.. tostring(data.Name)
 	)
 end
 
@@ -33,6 +33,9 @@ function Executor.ProcessBuildQueue()
 			return false, "사용자가 중단했습니다."
 		end
 
+		assert(data.Name, "설치 항목 Name 누락")
+		assert(data.Type, "설치 항목 Type 누락")
+
 		Utils.SetTask(
 			"블록 설치: " .. tostring(data.Name),
 			total > 0 and index / total or 1
@@ -44,9 +47,10 @@ function Executor.ProcessBuildQueue()
 			resolveCFrame(data)
 		)
 
-		if data.Type == "Switch"
-			and data.AutoUnbind ~= false then
-
+		if (
+			data.Type == "Switch"
+			or data.Type == "Button"
+		) and data.AutoUnbind ~= false then
 			Binder.AutoUnbindNearest(object)
 		end
 
@@ -91,6 +95,9 @@ function Executor.ProcessPaintQueue()
 			return false, "사용자가 중단했습니다."
 		end
 
+		assert(data.Object, "도색 대상 누락")
+		assert(data.Color, "도색 색상 누락")
+
 		Utils.SetTask(
 			"블록 도색",
 			total > 0 and index / total or 1
@@ -115,6 +122,9 @@ function Executor.ProcessConnectionQueue()
 		if Utils.IsCancelled() then
 			return false, "사용자가 중단했습니다."
 		end
+
+		assert(data.Source, "배선 Source 누락")
+		assert(data.Targets, "배선 Targets 누락")
 
 		Utils.SetTask(
 			"회로 배선: " .. tostring(data.Source),
@@ -148,6 +158,7 @@ function Executor.Run()
 	Context.State.CancelRequested = false
 	Context.State.Progress = 0
 	Context.State.CurrentTask = "자동건설 준비"
+	Context.State.LastError = nil
 
 	Context:ResetStatistics()
 
@@ -155,16 +166,28 @@ function Executor.Run()
 		local ok, reason
 
 		ok, reason = Executor.ProcessBuildQueue()
-		if not ok then error(reason) end
+
+		if not ok then
+			error(reason)
+		end
 
 		ok, reason = Executor.ProcessPropertyQueue()
-		if not ok then error(reason) end
+
+		if not ok then
+			error(reason)
+		end
 
 		ok, reason = Executor.ProcessPaintQueue()
-		if not ok then error(reason) end
+
+		if not ok then
+			error(reason)
+		end
 
 		ok, reason = Executor.ProcessConnectionQueue()
-		if not ok then error(reason) end
+
+		if not ok then
+			error(reason)
+		end
 
 		Utils.SetTask("자동건설 완료", 1)
 
@@ -179,7 +202,7 @@ function Executor.Run()
 
 		warn(
 			"[BABFT] 자동건설 실패\n"
-			.. tostring(result)
+				.. tostring(result)
 		)
 
 		return false, result
