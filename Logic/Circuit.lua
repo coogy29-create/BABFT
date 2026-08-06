@@ -1,67 +1,89 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Circuit = {}
+
 local Gates = Context.Modules.Gates
 local Wiring = Context.Modules.Wiring
 
-local Circuit = {}
-
 local function createGate(spec)
-
-	local gate
+	assert(spec.Name, "Gate Name 누락")
+	assert(spec.Type, "Gate Type 누락")
+	assert(typeof(spec.CFrame) == "CFrame", "Gate CFrame 누락: " .. tostring(spec.Name))
 
 	if spec.Type == "And" then
-		gate = Gates.And(spec.Name,spec.CFrame)
-
+		return Gates.And(spec.Name, spec.CFrame)
 	elseif spec.Type == "Or" then
-		gate = Gates.Or(spec.Name,spec.CFrame)
-
+		return Gates.Or(spec.Name, spec.CFrame)
 	elseif spec.Type == "Xor" then
-		gate = Gates.Xor(spec.Name,spec.CFrame)
-
+		return Gates.Xor(spec.Name, spec.CFrame)
 	elseif spec.Type == "Not" then
-		gate = Gates.Not(spec.Name,spec.CFrame)
-
-	else
-		error("지원하지 않는 Gate : "..tostring(spec.Type))
+		return Gates.Not(spec.Name, spec.CFrame)
 	end
 
-	return gate
-
+	error("지원하지 않는 Gate 종류: " .. tostring(spec.Type))
 end
 
 function Circuit.Build(definition)
+	assert(type(definition) == "table", "definition은 테이블이어야 합니다.")
 
-	assert(definition)
+	local result = {
+		Name = definition.Name or "Circuit",
+		Objects = {},
+		Outputs = {},
+		Inputs = definition.Inputs or {}
+	}
 
-	local objects={}
-
-	if definition.Gates then
-
-		for _,gate in ipairs(definition.Gates) do
-
-			objects[gate.Name]=createGate(gate)
-
-		end
-
+	for _, spec in ipairs(definition.Gates or {}) do
+		local object = createGate(spec)
+		result.Objects[spec.Name] = object
 	end
 
-	if definition.Connections then
+	for _, connection in ipairs(definition.Connections or {}) do
+		assert(connection.From, "Connection From 누락")
+		assert(connection.To, "Connection To 누락")
 
-		for _,connection in ipairs(definition.Connections) do
-
+		if type(connection.To) == "table" then
+			Wiring.ConnectMany(
+				connection.From,
+				connection.To
+			)
+		else
 			Wiring.Connect(
 				connection.From,
 				connection.To
 			)
-
 		end
-
 	end
 
-	return objects
+	for outputName, source in pairs(definition.Outputs or {}) do
+		if typeof(source) == "Instance" then
+			result.Outputs[outputName] = source
+		else
+			result.Outputs[outputName] =
+				Context:GetObject(source)
+				or result.Objects[source]
+		end
+	end
 
+	return result
 end
 
-Context.Modules.Circuit=Circuit
+function Circuit.ConnectInput(source, targets)
+	if type(targets) == "table" then
+		Wiring.ConnectMany(source, targets)
+	else
+		Wiring.Connect(source, targets)
+	end
+end
+
+function Circuit.ConnectOutput(source, targets)
+	if type(targets) == "table" then
+		Wiring.ConnectMany(source, targets)
+	else
+		Wiring.Connect(source, targets)
+	end
+end
+
+Context.Modules.Circuit = Circuit
 
 return Circuit
