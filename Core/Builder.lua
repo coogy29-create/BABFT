@@ -12,6 +12,7 @@ local LocalPlayer = Players.LocalPlayer
 
 Builder.CurrentName = "UNKNOWN"
 Builder.PlaceIndex = 0
+Builder.LastInvokeDebug = ""
 
 local function copyText(text)
 	if setclipboard then
@@ -127,6 +128,7 @@ local function chooseCreatedObject(
 )
 	local nearestMatching = nil
 	local nearestMatchingDistance = math.huge
+
 	local nearestAny = nil
 	local nearestAnyDistance = math.huge
 
@@ -135,10 +137,7 @@ local function chooseCreatedObject(
 			local position = getObjectPosition(object)
 
 			if object.Name == blockName then
-				if not position then
-					nearestMatching =
-						nearestMatching or object
-				else
+				if position then
 					local distance =
 						(position - targetPosition).Magnitude
 
@@ -146,6 +145,8 @@ local function chooseCreatedObject(
 						nearestMatching = object
 						nearestMatchingDistance = distance
 					end
+				elseif not nearestMatching then
+					nearestMatching = object
 				end
 			end
 
@@ -166,13 +167,79 @@ local function chooseCreatedObject(
 	return nearestMatching or nearestAny
 end
 
+local function formatInvokeResult(result)
+	if typeof(result) == "Instance" then
+		return result:GetFullName()
+	end
+
+	if type(result) == "table" then
+		local parts = {}
+
+		for key, value in pairs(result) do
+			parts[#parts + 1] =
+				tostring(key)
+				.. "="
+				.. tostring(value)
+		end
+
+		return "{"
+			.. table.concat(parts, ", ")
+			.. "}"
+	end
+
+	return tostring(result)
+end
+
+local function createInvokeDebug(
+	blockName,
+	inventoryValue,
+	zone,
+	zoneCFrame,
+	worldCFrame,
+	invokeSuccess,
+	invokeResult,
+	beforeCount
+)
+	local resultText = formatInvokeResult(
+		invokeResult
+	)
+
+	return table.concat({
+		"[BABFT InvokeServer 결과]",
+		"순서: " .. tostring(Builder.PlaceIndex),
+		"등록 이름: " .. tostring(Builder.CurrentName),
+		"블록 종류: " .. tostring(blockName),
+		"보유량 인자: " .. tostring(inventoryValue),
+		"WhiteZone: " .. tostring(zone),
+		"성공: " .. tostring(invokeSuccess),
+		"반환 타입: " .. typeof(invokeResult),
+		"반환값: " .. resultText,
+		"설치 전 개수: " .. tostring(beforeCount),
+
+		string.format(
+			"World 좌표: %.3f, %.3f, %.3f",
+			worldCFrame.Position.X,
+			worldCFrame.Position.Y,
+			worldCFrame.Position.Z
+		),
+
+		string.format(
+			"Zone 좌표: %.3f, %.3f, %.3f",
+			zoneCFrame.Position.X,
+			zoneCFrame.Position.Y,
+			zoneCFrame.Position.Z
+		)
+	}, "\n")
+end
+
 local function buildDiagnostic(
 	folder,
 	blockName,
 	worldCFrame,
 	beforeCount,
 	afterCount,
-	addedObjects
+	addedObjects,
+	invokeDebug
 )
 	local lines = {
 		"[BABFT Builder 진단]",
@@ -181,29 +248,41 @@ local function buildDiagnostic(
 		"블록 종류: " .. tostring(blockName),
 		"설치 전 개수: " .. tostring(beforeCount),
 		"설치 후 개수: " .. tostring(afterCount),
+
 		string.format(
 			"요청 좌표: %.2f, %.2f, %.2f",
 			worldCFrame.Position.X,
 			worldCFrame.Position.Y,
 			worldCFrame.Position.Z
 		),
+
 		"ChildAdded 감지 수: "
 			.. tostring(#addedObjects),
+
+		"",
+		invokeDebug,
 		"",
 		"ChildAdded 목록:"
 	}
 
 	for index, object in ipairs(addedObjects) do
+		local fullName = "삭제됨"
+
+		if object and object.Parent then
+			fullName = object:GetFullName()
+		end
+
 		lines[#lines + 1] = string.format(
 			"%d. %s | %s",
 			index,
-			object.Name,
-			object:GetFullName()
+			object and object.Name or "nil",
+			fullName
 		)
 	end
 
 	lines[#lines + 1] = ""
-	lines[#lines + 1] = "현재 플레이어 블록 목록:"
+	lines[#lines + 1] =
+		"현재 플레이어 블록 목록:"
 
 	for index, object in ipairs(folder:GetChildren()) do
 		lines[#lines + 1] = string.format(
@@ -230,8 +309,10 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 	Builder.PlaceIndex += 1
 
 	local folder = Utils.GetBlocksFolder()
+
 	local blockName =
-		Config.BlockNames[blockType] or blockType
+		Config.BlockNames[blockType]
+		or blockType
 
 	local snapshot = takeSnapshot(folder)
 	local beforeCount = #folder:GetChildren()
@@ -248,7 +329,8 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 
 	local childConnection =
 		folder.ChildAdded:Connect(function(object)
-			addedObjects[#addedObjects + 1] = object
+			addedObjects[#addedObjects + 1] =
+				object
 
 			print(
 				"[Builder ChildAdded]",
@@ -258,6 +340,7 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 		end)
 
 	local remote = getBuildingRemote()
+
 	local inventoryValue =
 		resolveInventoryValue(blockType)
 
@@ -278,31 +361,41 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 		and WhiteZone.WorldToZone(worldCFrame)
 		or Utils.WorldToZoneCFrame(worldCFrame)
 
-	local invokeSuccess, invokeResult = pcall(function()
-		return remote:InvokeServer(
-			blockName,
-			inventoryValue,
-			zone,
-			zoneCFrame,
-			true,
-			worldCFrame,
-			false
-		)
-	end)
+	local invokeSuccess, invokeResult =
+		pcall(function()
+			return remote:InvokeServer(
+				blockName,
+				inventoryValue,
+				zone,
+				zoneCFrame,
+				true,
+				worldCFrame,
+				false
+			)
+		end)
+
+	local invokeDebug = createInvokeDebug(
+		blockName,
+		inventoryValue,
+		zone,
+		zoneCFrame,
+		worldCFrame,
+		invokeSuccess,
+		invokeResult,
+		beforeCount
+	)
+
+	Builder.LastInvokeDebug = invokeDebug
+
+	print(invokeDebug)
+	copyText(invokeDebug)
 
 	if not invokeSuccess then
 		childConnection:Disconnect()
 
 		local errorText =
-			"블록 설치 리모트 실패\n"
-			.. "순서: "
-			.. tostring(Builder.PlaceIndex)
-			.. "\n등록 이름: "
-			.. tostring(Builder.CurrentName)
-			.. "\n블록: "
-			.. tostring(blockName)
-			.. "\n오류: "
-			.. tostring(invokeResult)
+			invokeDebug
+			.. "\n\n블록 설치 리모트 호출 실패"
 
 		copyText(errorText)
 
@@ -321,13 +414,17 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 	end
 
 	local created = nil
+
 	local deadline =
-		os.clock() + (Config.InstallTimeout or 7)
+		os.clock()
+		+ (Config.InstallTimeout or 7)
 
 	repeat
 		if Utils.IsCancelled() then
 			childConnection:Disconnect()
-			return nil, "사용자가 중단했습니다."
+
+			return nil,
+				"사용자가 중단했습니다."
 		end
 
 		local candidates = {}
@@ -337,16 +434,25 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 				and object.Parent
 				and not snapshot[object] then
 
-				candidates[#candidates + 1] = object
+				candidates[#candidates + 1] =
+					object
 			end
 		end
 
 		local currentNewObjects =
-			collectNewObjects(folder, snapshot)
+			collectNewObjects(
+				folder,
+				snapshot
+			)
 
 		for _, object in ipairs(currentNewObjects) do
-			if not table.find(candidates, object) then
-				candidates[#candidates + 1] = object
+			if not table.find(
+				candidates,
+				object
+			) then
+
+				candidates[#candidates + 1] =
+					object
 			end
 		end
 
@@ -366,7 +472,8 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 	childConnection:Disconnect()
 
 	if not created then
-		local afterCount = #folder:GetChildren()
+		local afterCount =
+			#folder:GetChildren()
 
 		local diagnostic = buildDiagnostic(
 			folder,
@@ -374,7 +481,8 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 			worldCFrame,
 			beforeCount,
 			afterCount,
-			addedObjects
+			addedObjects,
+			invokeDebug
 		)
 
 		copyText(diagnostic)
@@ -405,7 +513,8 @@ function Builder.PlaceNamedBlock(
 	worldCFrame
 )
 	assert(
-		type(name) == "string" and name ~= "",
+		type(name) == "string"
+			and name ~= "",
 		"등록 이름이 필요합니다."
 	)
 
@@ -421,7 +530,10 @@ function Builder.PlaceNamedBlock(
 		error(errorMessage)
 	end
 
-	Context:RegisterObject(name, object)
+	Context:RegisterObject(
+		name,
+		object
+	)
 
 	return object
 end
@@ -443,18 +555,23 @@ function Builder.PlaceMany(list)
 		local cframe =
 			data.CFrame
 			or (
-				typeof(data.Position) == "Vector3"
+				typeof(data.Position)
+					== "Vector3"
 				and CFrame.new(data.Position)
 			)
 
 		assert(
 			typeof(cframe) == "CFrame",
-			"CFrame 누락: " .. tostring(data.Name)
+			"CFrame 누락: "
+				.. tostring(data.Name)
 		)
 
 		Utils.SetTask(
-			"블록 설치: " .. tostring(data.Name),
-			total > 0 and index / total or 1
+			"블록 설치: "
+				.. tostring(data.Name),
+			total > 0
+				and index / total
+				or 1
 		)
 
 		local object =
@@ -464,7 +581,8 @@ function Builder.PlaceMany(list)
 				cframe
 			)
 
-		created[#created + 1] = object
+		created[#created + 1] =
+			object
 
 		if data.GateType then
 			Context:QueueProperty({
@@ -480,7 +598,9 @@ function Builder.PlaceMany(list)
 			})
 		end
 
-		task.wait(Config.PlaceDelay or 0)
+		task.wait(
+			Config.PlaceDelay or 0
+		)
 	end
 
 	return created
@@ -491,32 +611,39 @@ function Builder.Find(name)
 end
 
 function Builder.Exists(name)
-	local object = Context:GetObject(name)
+	local object =
+		Context:GetObject(name)
 
 	return object ~= nil
 		and object.Parent ~= nil
 end
 
 function Builder.Require(name)
-	local object = Context:GetObject(name)
+	local object =
+		Context:GetObject(name)
 
 	assert(
 		object and object.Parent,
-		"등록된 블록 없음: " .. tostring(name)
+		"등록된 블록 없음: "
+			.. tostring(name)
 	)
 
 	return object
 end
 
 function Builder.Unregister(name)
-	local object = Context.NamedObjects[name]
+	local object =
+		Context.NamedObjects[name]
+
 	Context.NamedObjects[name] = nil
 
 	return object
 end
 
 function Builder.ClearRegistry()
-	table.clear(Context.NamedObjects)
+	table.clear(
+		Context.NamedObjects
+	)
 end
 
 Context.Modules.Builder = Builder
