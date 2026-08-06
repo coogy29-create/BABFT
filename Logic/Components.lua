@@ -1,58 +1,78 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local Gates=Context.Modules.Gates
-local Wiring=Context.Modules.Wiring
+local Components = {}
 
-local Components={}
+local Circuit = Context.Modules.Circuit
 
-local function P(origin,x,z)
+function Components.Create(definition)
+	return Circuit.Build(definition)
+end
 
-	return CFrame.new(
-		origin.Position+
-		Vector3.new(x,0,z)
+function Components.Connect(source,target)
+
+	Circuit.ConnectOutput(
+		source,
+		target
 	)
 
 end
 
-function Components.HalfAdder(name,origin)
+function Components.ConnectMany(source,...)
 
-	local xor=Gates.Xor(
-		name.."_XOR",
-		P(origin,0,0)
+	local targets={...}
+
+	Circuit.ConnectOutput(
+		source,
+		targets
 	)
 
-	local andGate=Gates.And(
-		name.."_AND",
-		P(origin,0,4)
-	)
+end
 
-	Wiring.Connect(
-		name.."_A",
-		name.."_XOR"
-	)
+function Components.Bus(prefix,width)
 
-	Wiring.Connect(
-		name.."_B",
-		name.."_XOR"
-	)
+	local result={}
 
-	Wiring.Connect(
-		name.."_A",
-		name.."_AND"
-	)
+	for bit=0,width-1 do
 
-	Wiring.Connect(
-		name.."_B",
-		name.."_AND"
-	)
+		result[bit]=prefix.."_BIT_"..bit
 
-	return{
+	end
 
-		Sum=xor,
+	return result
 
-		Carry=andGate
+end
 
-	}
+function Components.Named(prefix,count)
+
+	local result={}
+
+	for i=1,count do
+
+		result[i]=prefix.."_"..i
+
+	end
+
+	return result
+
+end
+
+function Components.Pair(inputBus,outputBus)
+
+	local result={}
+
+	for bit,input in pairs(inputBus) do
+
+		result[#result+1]={
+
+			Input=input,
+
+			Output=outputBus[bit]
+
+		}
+
+	end
+
+	return result
 
 end
 
