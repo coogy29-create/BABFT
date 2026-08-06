@@ -1,4 +1,3 @@
-
 local Context = getgenv().BABFT_CALCULATOR
 
 local Config = {}
@@ -7,7 +6,8 @@ Config.Tools = {
 	BuildingTool = "BuildingTool",
 	BindTool = "BindTool",
 	PropertiesTool = "PropertiesTool",
-	PaintingTool = "PaintingTool"
+	PaintingTool = "PaintingTool",
+	PaintTool = "PaintingTool"
 }
 
 Config.BlockNames = {
@@ -66,17 +66,105 @@ Config.AutoPaint = true
 Config.AutoProperty = true
 
 Config.Layout = {
-	GridSpacing = 4,
-	BusSpacing = 4,
-	GateSpacing = 6,
-	RegisterSpacing = 28,
-	ModuleSpacing = 64
+	GridSpacing = 2,
+	BusSpacing = 2,
+	GateSpacing = 2.5,
+	RegisterSpacing = 10,
+	ModuleSpacing = 18,
+
+	Compact = true,
+
+	HorizontalScale = 0.22,
+	DepthScale = 0.22,
+
+	LayerHeight = 3.2,
+	LayerCount = 50
 }
+
+function Config.Layout.GetLayeredOffset(index)
+	index = math.max(
+		0,
+		math.floor(index or 0)
+	)
+
+	local layer =
+		index % Config.Layout.LayerCount
+
+	local slot =
+		math.floor(
+			index / Config.Layout.LayerCount
+		)
+
+	return Vector3.new(
+		slot * Config.Layout.GateSpacing,
+		layer * Config.Layout.LayerHeight,
+		0
+	)
+end
+
+function Config.Layout.GetLayeredCFrame(
+	origin,
+	index,
+	depth
+)
+	assert(
+		typeof(origin) == "CFrame",
+		"origin은 CFrame이어야 합니다."
+	)
+
+	local offset =
+		Config.Layout.GetLayeredOffset(index)
+
+	return origin * CFrame.new(
+		offset.X,
+		offset.Y,
+		depth or 0
+	)
+end
+
+function Config.Layout.ScaleOffset(
+	x,
+	y,
+	z
+)
+	return Vector3.new(
+		(x or 0)
+			* Config.Layout.HorizontalScale,
+
+		y or 0,
+
+		(z or 0)
+			* Config.Layout.DepthScale
+	)
+end
+
+function Config.Layout.ScaleCFrame(
+	origin,
+	x,
+	y,
+	z
+)
+	assert(
+		typeof(origin) == "CFrame",
+		"origin은 CFrame이어야 합니다."
+	)
+
+	local offset =
+		Config.Layout.ScaleOffset(
+			x,
+			y,
+			z
+		)
+
+	return origin * CFrame.new(offset)
+end
 
 Config.Display = {
 	Digits = 5,
 	Width = 5,
-	Height = 7
+	Height = 7,
+	PixelSpacing = 2,
+	DigitSpacing = 14
 }
 
 Config.Calculator = {
