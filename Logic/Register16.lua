@@ -13,9 +13,11 @@ local function P(origin, x, y, z)
 end
 
 function Register16.Build(name, origin)
-	local cells = {}
-	local outputBus = {}
-	local invertedBus = {}
+	local self = {}
+
+	self.Cells = {}
+	self.Q = {}
+	self.QB = {}
 
 	for bit = 0, 15 do
 		local column = bit % 4
@@ -25,53 +27,47 @@ function Register16.Build(name, origin)
 			name .. "_BIT_" .. bit,
 			P(
 				origin,
-				column * 54,
+				column * 56,
 				0,
-				row * 24
+				row * 28
 			)
 		)
 
-		cells[bit] = cell
-		outputBus[bit] = cell.Q
-		invertedBus[bit] = cell.QB
+		self.Cells[bit] = cell
+		self.Q[bit] = cell.Q
+		self.QB[bit] = cell.QB
 	end
 
-	local function connectData(inputBus)
+	function self.ConnectData(inputBus)
 		assert(
 			type(inputBus) == "table",
-			"입력 버스가 필요합니다."
+			"16비트 데이터 버스가 필요합니다."
 		)
 
 		for bit = 0, 15 do
 			assert(
 				inputBus[bit],
-				"입력 버스 비트 누락: " .. bit
+				"데이터 비트 누락: " .. bit
 			)
 
-			cells[bit].ConnectData(
+			self.Cells[bit].ConnectData(
 				inputBus[bit]
 			)
 		end
 	end
 
-	local function connectClock(source)
+	function self.ConnectClock(source)
 		assert(
 			source,
 			"클럭 입력이 필요합니다."
 		)
 
 		for bit = 0, 15 do
-			cells[bit].ConnectClock(source)
+			self.Cells[bit].ConnectClock(source)
 		end
 	end
 
-	return {
-		Cells = cells,
-		Q = outputBus,
-		QB = invertedBus,
-		ConnectData = connectData,
-		ConnectClock = connectClock
-	}
+	return self
 end
 
 Context.Modules.Register16 = Register16
