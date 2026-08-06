@@ -78,7 +78,7 @@ Config.Layout = {
 	DepthScale = 0.22,
 
 	LayerHeight = 3.2,
-	LayerCount = 50
+	LayerCount = 100
 }
 
 function Config.Layout.GetLayeredOffset(index)
