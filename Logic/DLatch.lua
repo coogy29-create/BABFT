@@ -14,43 +14,43 @@ local function P(origin, x, y, z)
 end
 
 function DLatch.Build(name, origin)
-	local notD = Gates.Not(
-		name .. "_NOT_D",
-		P(origin, 0, 0, 8)
+	local notData = Gates.Not(
+		name .. "_NOT_DATA",
+		P(origin, 0, 0, 12)
 	)
 
 	local setGate = Gates.And(
 		name .. "_SET",
-		P(origin, 12, 0, 0)
+		P(origin, 14, 0, 0)
 	)
 
 	local resetGate = Gates.And(
 		name .. "_RESET",
-		P(origin, 12, 0, 12)
+		P(origin, 14, 0, 16)
 	)
 
 	local qOr = Gates.Or(
 		name .. "_Q_OR",
-		P(origin, 28, 0, 0)
+		P(origin, 30, 0, 0)
 	)
 
-	local qNot = Gates.Not(
+	local q = Gates.Not(
 		name .. "_Q",
-		P(origin, 40, 0, 0)
+		P(origin, 44, 0, 0)
 	)
 
 	local qbOr = Gates.Or(
 		name .. "_QB_OR",
-		P(origin, 28, 0, 12)
+		P(origin, 30, 0, 16)
 	)
 
-	local qbNot = Gates.Not(
+	local qb = Gates.Not(
 		name .. "_QB",
-		P(origin, 40, 0, 12)
+		P(origin, 44, 0, 16)
 	)
 
 	Wiring.Connect(
-		notD,
+		notData,
 		resetGate
 	)
 
@@ -66,28 +66,30 @@ function DLatch.Build(name, origin)
 
 	Wiring.Connect(
 		qOr,
-		qNot
+		q
 	)
 
 	Wiring.Connect(
 		qbOr,
-		qbNot
+		qb
 	)
 
 	Wiring.Connect(
-		qNot,
+		q,
 		qbOr
 	)
 
 	Wiring.Connect(
-		qbNot,
+		qb,
 		qOr
 	)
 
-	local function connectData(source)
+	local self = {}
+
+	function self.ConnectData(source)
 		Wiring.Connect(
 			source,
-			notD
+			notData
 		)
 
 		Wiring.Connect(
@@ -96,7 +98,7 @@ function DLatch.Build(name, origin)
 		)
 	end
 
-	local function connectEnable(source)
+	function self.ConnectEnable(source)
 		Wiring.Connect(
 			source,
 			setGate
@@ -108,14 +110,13 @@ function DLatch.Build(name, origin)
 		)
 	end
 
-	return {
-		Q = qNot,
-		QB = qbNot,
-		Set = setGate,
-		Reset = resetGate,
-		ConnectData = connectData,
-		ConnectEnable = connectEnable
-	}
+	self.Q = q
+	self.QB = qb
+	self.Set = setGate
+	self.Reset = resetGate
+	self.NotData = notData
+
+	return self
 end
 
 Context.Modules.DLatch = DLatch
