@@ -1,35 +1,32 @@
-local Context = getgenv().BABFT_CALCULATOR
+local Context=getgenv().BABFT_CALCULATOR
 
-local Builder = Context.Modules.Builder
-local Paint = Context.Modules.Paint
+local Gates={}
 
-local Gates = {}
+local Builder=Context.Modules.Builder
 
-local function register(name, object)
-	Context:RegisterObject(name, object)
-	return object
-end
+local function create(name,gateType,cframe)
 
-function Gates.Create(name, gateType, cframe)
-
-	local gate = Builder.PlaceNamedBlock(
+	local gate=Builder.PlaceNamedBlock(
 		name,
 		"Gate",
 		cframe
 	)
 
 	Context:QueueProperty({
-		Type = gateType,
-		Gate = gate
+
+		Type=gateType,
+
+		Gate=gate
+
 	})
 
 	return gate
 
 end
 
-function Gates.And(name, cframe)
+function Gates.And(name,cframe)
 
-	return Gates.Create(
+	return create(
 		name,
 		"And",
 		cframe
@@ -37,9 +34,9 @@ function Gates.And(name, cframe)
 
 end
 
-function Gates.Or(name, cframe)
+function Gates.Or(name,cframe)
 
-	return Gates.Create(
+	return create(
 		name,
 		"Or",
 		cframe
@@ -47,9 +44,9 @@ function Gates.Or(name, cframe)
 
 end
 
-function Gates.Xor(name, cframe)
+function Gates.Xor(name,cframe)
 
-	return Gates.Create(
+	return create(
 		name,
 		"Xor",
 		cframe
@@ -57,9 +54,9 @@ function Gates.Xor(name, cframe)
 
 end
 
-function Gates.Not(name, cframe)
+function Gates.Not(name,cframe)
 
-	return Gates.Create(
+	return create(
 		name,
 		"Not",
 		cframe
@@ -67,43 +64,22 @@ function Gates.Not(name, cframe)
 
 end
 
-function Gates.White(name, cframe)
+function Gates.Array(prefix,gateType,count,origin,spacing)
 
-	local gate = Gates.And(
-		name,
-		cframe
-	)
+	local result={}
 
-	Paint.PaintWhite(gate)
+	spacing=spacing or 6
 
-	return gate
+	for i=0,count-1 do
 
-end
+		result[i]=create(
 
-function Gates.Black(name, cframe)
+			prefix.."_"..i,
 
-	local gate = Gates.And(
-		name,
-		cframe
-	)
+			gateType,
 
-	Paint.PaintBlack(gate)
+			origin*CFrame.new(i*spacing,0,0)
 
-	return gate
-
-end
-
-function Gates.Line(startPos, direction, count, spacing)
-
-	local result = {}
-
-	local offset = direction.Unit * spacing
-
-	for i = 1, count do
-
-		table.insert(
-			result,
-			startPos + offset * (i - 1)
 		)
 
 	end
@@ -112,32 +88,6 @@ function Gates.Line(startPos, direction, count, spacing)
 
 end
 
-function Gates.Grid(origin, right, forward, width, height, spacing)
-
-	local result = {}
-
-	local rightOffset = right.Unit * spacing
-	local forwardOffset = forward.Unit * spacing
-
-	for y = 0, height - 1 do
-
-		for x = 0, width - 1 do
-
-			table.insert(
-				result,
-				origin
-				+ rightOffset * x
-				+ forwardOffset * y
-			)
-
-		end
-
-	end
-
-	return result
-
-end
-
-Context.Modules.Gates = Gates
+Context.Modules.Gates=Gates
 
 return Gates
