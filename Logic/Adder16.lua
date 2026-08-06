@@ -13,9 +13,11 @@ local function P(origin, x, y, z)
 end
 
 function Adder16.Build(name, origin)
-	local adders = {}
-	local sumBus = {}
-	local carryBus = {}
+	local self = {}
+
+	self.Adders = {}
+	self.Sum = {}
+	self.Carry = {}
 
 	for bit = 0, 15 do
 		local column = bit % 4
@@ -27,22 +29,22 @@ function Adder16.Build(name, origin)
 				origin,
 				column * 60,
 				0,
-				row * 34
+				row * 36
 			)
 		)
 
-		adders[bit] = adder
-		sumBus[bit] = adder.Sum
-		carryBus[bit] = adder.Carry
+		self.Adders[bit] = adder
+		self.Sum[bit] = adder.Sum
+		self.Carry[bit] = adder.Carry
 	end
 
 	for bit = 0, 14 do
-		adders[bit + 1].ConnectCarryIn(
-			carryBus[bit]
+		self.Adders[bit + 1].ConnectCarryIn(
+			self.Carry[bit]
 		)
 	end
 
-	local function connectABus(bus)
+	function self.ConnectABus(bus)
 		assert(
 			type(bus) == "table",
 			"A 입력 버스가 필요합니다."
@@ -54,13 +56,13 @@ function Adder16.Build(name, origin)
 				"A 입력 비트 누락: " .. bit
 			)
 
-			adders[bit].ConnectA(
+			self.Adders[bit].ConnectA(
 				bus[bit]
 			)
 		end
 	end
 
-	local function connectBBus(bus)
+	function self.ConnectBBus(bus)
 		assert(
 			type(bus) == "table",
 			"B 입력 버스가 필요합니다."
@@ -72,30 +74,24 @@ function Adder16.Build(name, origin)
 				"B 입력 비트 누락: " .. bit
 			)
 
-			adders[bit].ConnectB(
+			self.Adders[bit].ConnectB(
 				bus[bit]
 			)
 		end
 	end
 
-	local function connectCarryIn(source)
+	function self.ConnectCarryIn(source)
 		assert(
 			source,
 			"Carry 입력이 필요합니다."
 		)
 
-		adders[0].ConnectCarryIn(source)
+		self.Adders[0].ConnectCarryIn(source)
 	end
 
-	return {
-		Adders = adders,
-		Sum = sumBus,
-		Carry = carryBus,
-		CarryOut = carryBus[15],
-		ConnectABus = connectABus,
-		ConnectBBus = connectBBus,
-		ConnectCarryIn = connectCarryIn
-	}
+	self.CarryOut = self.Carry[15]
+
+	return self
 end
 
 Context.Modules.Adder16 = Adder16
