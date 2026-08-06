@@ -18,21 +18,22 @@ end
 function KeypadEncoder.Build(name, origin)
 	local buttons = {}
 	local digitBus = {}
+	local pressedPulse
 
 	local positions = {
-		[1] = {0, 12},
-		[2] = {6, 12},
-		[3] = {12, 12},
+		[1] = {0, 0, 12},
+		[2] = {6, 0, 12},
+		[3] = {12, 0, 12},
 
-		[4] = {0, 8},
-		[5] = {6, 8},
-		[6] = {12, 8},
+		[4] = {0, 0, 8},
+		[5] = {6, 0, 8},
+		[6] = {12, 0, 8},
 
-		[7] = {0, 4},
-		[8] = {6, 4},
-		[9] = {12, 4},
+		[7] = {0, 0, 4},
+		[8] = {6, 0, 4},
+		[9] = {12, 0, 4},
 
-		[0] = {6, 0}
+		[0] = {6, 0, 0}
 	}
 
 	for digit = 0, 9 do
@@ -44,8 +45,8 @@ function KeypadEncoder.Build(name, origin)
 			P(
 				origin,
 				position[1],
-				0,
-				position[2]
+				position[2],
+				position[3]
 			)
 		)
 
@@ -56,17 +57,22 @@ function KeypadEncoder.Build(name, origin)
 
 	for bit = 0, 3 do
 		digitBus[bit] = Gates.Or(
-			name .. "_BIT_" .. bit,
+			name .. "_DIGIT_BIT_" .. bit,
 			P(
 				origin,
-				24,
+				26,
 				0,
-				bit * 6
+				bit * 7
 			)
 		)
 	end
 
-	local bitDigits = {
+	pressedPulse = Gates.Or(
+		name .. "_PRESSED_PULSE",
+		P(origin, 36, 0, 10)
+	)
+
+	local bitMap = {
 		[0] = {1, 3, 5, 7, 9},
 		[1] = {2, 3, 6, 7},
 		[2] = {4, 5, 6, 7},
@@ -74,7 +80,7 @@ function KeypadEncoder.Build(name, origin)
 	}
 
 	for bit = 0, 3 do
-		for _, digit in ipairs(bitDigits[bit]) do
+		for _, digit in ipairs(bitMap[bit]) do
 			Wiring.Connect(
 				buttons[digit],
 				digitBus[bit]
@@ -82,22 +88,17 @@ function KeypadEncoder.Build(name, origin)
 		end
 	end
 
-	local pulse = Gates.Or(
-		name .. "_DIGIT_PULSE",
-		P(origin, 32, 0, 10)
-	)
-
 	for digit = 0, 9 do
 		Wiring.Connect(
 			buttons[digit],
-			pulse
+			pressedPulse
 		)
 	end
 
 	return {
 		Buttons = buttons,
 		DigitBus = digitBus,
-		Pulse = pulse
+		Pulse = pressedPulse
 	}
 end
 
