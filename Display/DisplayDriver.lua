@@ -117,18 +117,14 @@ local function P(origin, x, y, z)
 	)
 end
 
-local function buildDigitDecoder(
-	name,
-	origin,
-	inputBus
-)
+local function buildDecoder(name, origin, inputBus)
 	local inverted = {}
 	local values = {}
 
 	for bit = 0, 3 do
 		inverted[bit] = Gates.Not(
 			name .. "_NOT_" .. bit,
-			P(origin, bit * 6, 0, 0)
+			P(origin, bit * 8, 0, 0)
 		)
 
 		Wiring.Connect(
@@ -142,9 +138,9 @@ local function buildDigitDecoder(
 			name .. "_VALUE_" .. value,
 			P(
 				origin,
-				value * 6,
+				(value % 5) * 10,
 				0,
-				10
+				12 + math.floor(value / 5) * 10
 			)
 		)
 
@@ -164,58 +160,58 @@ local function buildDigitDecoder(
 	end
 
 	return {
-		Values = values,
-		Inverted = inverted
+		Inverted = inverted,
+		Values = values
 	}
 end
 
-function DisplayDriver.Build(
-	name,
-	origin,
-	digitCount
-)
+function DisplayDriver.Build(name, origin, digitCount)
+	local self = {}
+
 	digitCount = digitCount or 5
 
-	local result = {
-		Digits = {},
-		Decoders = {},
-		Pixels = {}
-	}
+	self.Digits = {}
+	self.Decoders = {}
+	self.Pixels = {}
 
-	local function connectDigit(
-		digitIndex,
-		inputBus
-	)
+	function self.ConnectDigit(digitIndex, inputBus)
+		assert(
+			digitIndex >= 1
+				and digitIndex <= digitCount,
+			"잘못된 자릿수: " .. tostring(digitIndex)
+		)
+
 		assert(
 			type(inputBus) == "table",
-			"BCD 입력 버스가 필요합니다."
+			"4비트 BCD 입력 버스가 필요합니다."
 		)
 
 		for bit = 0, 3 do
 			assert(
 				inputBus[bit],
-				"BCD 비트 누락: " .. bit
+				"BCD 입력 비트 누락: " .. bit
 			)
 		end
 
 		local digitOrigin = P(
 			origin,
-			(digitIndex - 1) * 90,
+			(digitIndex - 1) * 96,
 			0,
 			0
 		)
 
-		local decoder = buildDigitDecoder(
+		local decoder = buildDecoder(
 			name .. "_DIGIT_" .. digitIndex,
-			P(digitOrigin, 0, 0, -32),
+			P(digitOrigin, 0, 0, -42),
 			inputBus
 		)
 
-		result.Decoders[digitIndex] = decoder
-		result.Pixels[digitIndex] = {}
+		self.Decoders[digitIndex] = decoder
+		self.Digits[digitIndex] = {}
+		self.Pixels[digitIndex] = {}
 
 		for row = 1, 7 do
-			result.Pixels[digitIndex][row] = {}
+			self.Pixels[digitIndex][row] = {}
 
 			for column = 1, 5 do
 				local pixelName = string.format(
@@ -226,13 +222,16 @@ function DisplayDriver.Build(
 					column
 				)
 
+				local pixelX = column * 5
+				local pixelY = (8 - row) * 5
+
 				local display = Builder.PlaceNamedBlock(
 					pixelName,
 					"DisplayBlock",
 					P(
 						digitOrigin,
-						column * 4,
-						(8 - row) * 4,
+						pixelX,
+						pixelY,
 						0
 					)
 				)
@@ -241,9 +240,9 @@ function DisplayDriver.Build(
 					pixelName .. "_WHITE",
 					P(
 						digitOrigin,
-						column * 4,
-						(8 - row) * 4,
-						-12
+						pixelX,
+						pixelY,
+						-14
 					)
 				)
 
@@ -251,21 +250,11 @@ function DisplayDriver.Build(
 					pixelName .. "_BLACK",
 					P(
 						digitOrigin,
-						column * 4,
-						(8 - row) * 4,
-						-20
+						pixelX,
+						pixelY,
+						-24
 					)
 				)
-
-				Context:QueuePaint({
-					Object = whiteOutput,
-					Color = Config.Colors.White
-				})
-
-				Context:QueuePaint({
-					Object = blackOutput,
-					Color = Config.Colors.Black
-				})
 
 				for value = 0, 9 do
 					if FONT[value][row]:sub(
@@ -294,7 +283,21 @@ function DisplayDriver.Build(
 					display
 				)
 
-				result.Pixels[digitIndex][row][column] = {
+				Context:QueuePaint({
+					Object = whiteOutput,
+					Color = Config.Colors.White
+				})
+
+				Context:QueuePaint({
+					Object = blackOutput,
+					Color = Config.Colors.Black
+				})
+
+				self.Digits[digitIndex][
+					#self.Digits[digitIndex] + 1
+				] = display
+
+				self.Pixels[digitIndex][row][column] = {
 					Display = display,
 					White = whiteOutput,
 					Black = blackOutput
@@ -303,9 +306,7 @@ function DisplayDriver.Build(
 		end
 	end
 
-	result.ConnectDigit = connectDigit
-
-	return result
+	return self
 end
 
 Context.Modules.DisplayDriver = DisplayDriver
