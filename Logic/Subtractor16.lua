@@ -1,88 +1,102 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local Gates=Context.Modules.Gates
-local Adder16=Context.Modules.Adder16
-local Wiring=Context.Modules.Wiring
+local Gates = Context.Modules.Gates
+local Adder16 = Context.Modules.Adder16
+local Wiring = Context.Modules.Wiring
 
-local Subtractor16={}
+local Subtractor16 = {}
 
-local function P(origin,x,z)
-	return origin*CFrame.new(x,0,z)
+local function P(origin, x, y, z)
+	return origin * CFrame.new(
+		x or 0,
+		y or 0,
+		z or 0
+	)
 end
 
-function Subtractor16.Build(name,origin)
-
-	local adder=Adder16.Build(
-		name.."_ADDER",
-		P(origin,0,0)
+function Subtractor16.Build(name, origin)
+	local adder = Adder16.Build(
+		name .. "_ADDER",
+		P(origin, 0, 0, 24)
 	)
 
-	local xorBus={}
+	local invertedBBus = {}
 
-	for bit=0,15 do
+	for bit = 0, 15 do
+		local column = bit % 4
+		local row = math.floor(bit / 4)
 
-		xorBus[bit]=Gates.Xor(
-			name.."_BXOR_"..bit,
-			P(origin,bit*24,-8)
+		invertedBBus[bit] = Gates.Xor(
+			name .. "_B_XOR_" .. bit,
+			P(
+				origin,
+				column * 60,
+				0,
+				row * 34
+			)
 		)
 
-		Wiring.Connect(
-			xorBus[bit],
-			name.."_ADDER_FA_"..bit.."_HA1_B"
+		adder.Adders[bit].ConnectB(
+			invertedBBus[bit]
 		)
-
 	end
 
-	function xorBus.ConnectBBus(bus)
+	local function connectABus(bus)
+		assert(
+			type(bus) == "table",
+			"A 입력 버스가 필요합니다."
+		)
 
-		for bit=0,15 do
+		adder.ConnectABus(bus)
+	end
+
+	local function connectBBus(bus)
+		assert(
+			type(bus) == "table",
+			"B 입력 버스가 필요합니다."
+		)
+
+		for bit = 0, 15 do
+			assert(
+				bus[bit],
+				"B 입력 비트 누락: " .. bit
+			)
 
 			Wiring.Connect(
 				bus[bit],
-				name.."_BXOR_"..bit
+				invertedBBus[bit]
 			)
-
 		end
-
 	end
 
-	function xorBus.ConnectSubtract(source)
+	local function connectSubtract(source)
+		assert(
+			source,
+			"감산 선택 신호가 필요합니다."
+		)
 
-		for bit=0,15 do
-
+		for bit = 0, 15 do
 			Wiring.Connect(
 				source,
-				name.."_BXOR_"..bit
+				invertedBBus[bit]
 			)
-
 		end
 
 		adder.ConnectCarryIn(source)
-
 	end
 
-	function xorBus.ConnectABus(bus)
-
-		adder.ConnectABus(bus)
-
-	end
-
-	return{
-
-		Sum=adder.Sum,
-
-		CarryOut=adder.CarryOut,
-
-		ConnectABus=xorBus.ConnectABus,
-
-		ConnectBBus=xorBus.ConnectBBus,
-
-		ConnectSubtract=xorBus.ConnectSubtract
-
+	return {
+		Adder = adder,
+		InvertedB = invertedBBus,
+		Sum = adder.Sum,
+		Carry = adder.Carry,
+		CarryOut = adder.CarryOut,
+		ConnectABus = connectABus,
+		ConnectBBus = connectBBus,
+		ConnectSubtract = connectSubtract
 	}
-
 end
 
-Context.Modules.Subtractor16=Subtractor16
+Context.Modules.Subtractor16 = Subtractor16
 
 return Subtractor16
