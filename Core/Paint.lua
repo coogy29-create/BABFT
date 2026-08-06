@@ -5,64 +5,77 @@ local Utils = Context.Modules.Utils
 
 local Paint = {}
 
-local function getPaintTool()
+local function getPaintRemote()
 
 	local tool = Utils.WaitForTool(
-		Config.Tools.PaintingTool,
-		true
+		Config.Tools.PaintTool,
+		true,
+		10
 	)
 
-	assert(tool, "PaintingTool을 찾을 수 없습니다.")
+	assert(tool,"PaintTool을 찾을 수 없습니다.")
 
-	local remote = tool:FindFirstChild("RF")
+	local remote =
+		tool:FindFirstChild("RF")
+		or tool:FindFirstChild("PaintRF")
 
-	assert(remote, "PaintingTool.RF를 찾을 수 없습니다.")
+	assert(remote,"Paint Remote를 찾을 수 없습니다.")
 
 	return remote
 
 end
 
-local function resolveObject(object)
+local function resolve(object)
 
-	if typeof(object) == "Instance" then
+	if typeof(object)=="Instance" then
 		return object
 	end
 
-	local found = Context:GetObject(object)
+	local result=Context:GetObject(object)
 
-	assert(found, "등록되지 않은 객체 : "..tostring(object))
+	assert(result,"등록되지 않은 객체 : "..tostring(object))
 
-	return found
+	return result
 
 end
 
-function Paint.Paint(object, color)
+function Paint.Paint(object,color)
 
-	local remote = getPaintTool()
+	object=resolve(object)
 
-	local target = resolveObject(object)
+	local remote=getPaintRemote()
 
-	local success, result = pcall(function()
+	local success,result=pcall(function()
 
-		return remote:InvokeServer({
+		return remote:InvokeServer(
+			color,
 			{
-				target,
-				color
+				object
 			}
-		})
+		)
 
 	end)
 
 	if not success then
-		error(
-			"Paint 실패\n"
-			..tostring(result)
-		)
+		error(result)
 	end
 
-	Context.Statistics.PaintOperations += 1
+	Context.Statistics.PaintOperations+=1
 
 	task.wait(Config.PaintDelay)
+
+end
+
+function Paint.PaintMany(objects,color)
+
+	for _,object in ipairs(objects) do
+
+		Paint.Paint(
+			object,
+			color
+		)
+
+	end
 
 end
 
@@ -70,7 +83,7 @@ function Paint.PaintWhite(object)
 
 	Paint.Paint(
 		object,
-		Config.Colors.White
+		Color3.new(1,1,1)
 	)
 
 end
@@ -79,23 +92,14 @@ function Paint.PaintBlack(object)
 
 	Paint.Paint(
 		object,
-		Config.Colors.Black
+		Color3.new(0,0,0)
 	)
 
 end
 
-function Paint.BatchPaint(list)
+function Paint.ProcessQueue()
 
-	for index,data in ipairs(list) do
-
-		if Utils.IsCancelled() then
-			break
-		end
-
-		Utils.SetTask(
-			"도색",
-			index/#list
-		)
+	for _,data in ipairs(Context.PaintQueue) do
 
 		Paint.Paint(
 			data.Object,
@@ -104,8 +108,10 @@ function Paint.BatchPaint(list)
 
 	end
 
+	table.clear(Context.PaintQueue)
+
 end
 
-Context.Modules.Paint = Paint
+Context.Modules.Paint=Paint
 
 return Paint
