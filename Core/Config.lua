@@ -2,56 +2,25 @@ local Context = getgenv().BABFT_CALCULATOR
 
 local Config = {}
 
-Config.Version = "0.1.0"
-
-Config.Inventory = {
-	Gate = 3156,
-	Switch = 100,
-	DisplayBlock = 4100,
-	Delay = 551,
-	Button = 94
-}
-
-Config.ZoneOffset = Vector3.new(
-	53.565689086914,
-	18,
-	345.50686645508
-)
-
-Config.PlaceDelay = 0.03
-Config.BindDelay = 0.03
-Config.PropertyDelay = 0.03
-Config.PaintDelay = 0.03
-
-Config.InstallTimeout = 7
-
-Config.Colors = {
-	White = Color3.new(
-		0.97254902124405,
-		0.97254902124405,
-		0.97254902124405
-	),
-
-	Black = Color3.new(
-		0.066666670143604,
-		0.066666670143604,
-		0.066666670143604
-	)
-}
-
 Config.Tools = {
 	BuildingTool = "BuildingTool",
-	PropertiesTool = "PropertiesTool",
 	BindTool = "BindTool",
-	PaintingTool = "PaintingTool"
+	PropertiesTool = "PropertiesTool",
+	PaintTool = "PaintTool"
 }
 
 Config.BlockNames = {
 	Gate = "Gate",
-	Switch = "Switch",
 	Button = "Button",
-	DisplayBlock = "DisplayBlock",
-	Delay = "Delay"
+	Switch = "Switch",
+	DisplayBlock = "DisplayBlock"
+}
+
+Config.Inventory = {
+	Gate = 3156,
+	Button = 94,
+	Switch = 100,
+	DisplayBlock = 4100
 }
 
 Config.GateTypes = {
@@ -61,7 +30,41 @@ Config.GateTypes = {
 	Not = "Not"
 }
 
-Config.Debug = true
+Config.PlaceDelay = 0.05
+Config.BindDelay = 0.03
+Config.PropertyDelay = 0.03
+Config.PaintDelay = 0.02
+
+Config.InstallTimeout = 5
+Config.ActionTimeout = 5
+
+Config.ZoneOffset = Vector3.zero
+
+Config.AutoUnbind = true
+Config.AutoPaint = true
+Config.AutoProperty = true
+
+Config.DefaultColor = Color3.new(1, 1, 1)
+
+Config.Layout = {
+	GridSpacing = 4,
+	BusSpacing = 4,
+	GateSpacing = 6,
+	RegisterSpacing = 28,
+	ModuleSpacing = 64
+}
+
+Config.Display = {
+	Digits = 5,
+	Width = 5,
+	Height = 7
+}
+
+Config.Calculator = {
+	BitWidth = 16,
+	InputMode = "Decimal",
+	OutputMode = "Decimal"
+}
 
 Context.Config = Config
 
