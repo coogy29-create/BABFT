@@ -1,117 +1,131 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local Adder16=Context.Modules.Adder16
-local Register16=Context.Modules.Register16
-local Wiring=Context.Modules.Wiring
+local Gates = Context.Modules.Gates
+local Adder16 = Context.Modules.Adder16
+local Register16 = Context.Modules.Register16
 
-local DecimalInput={}
+local DecimalInput = {}
 
-local function P(origin,x,z)
-	return origin*CFrame.new(x,0,z)
+local function P(origin, x, y, z)
+	return origin * CFrame.new(
+		x or 0,
+		y or 0,
+		z or 0
+	)
 end
 
-function DecimalInput.Build(name,origin)
+function DecimalInput.Build(name, origin)
+	local self = {}
 
-	local multiplyAdder=Adder16.Build(
-		name.."_MUL10",
-		P(origin,0,0)
+	self.Zero = Gates.And(
+		name .. "_ZERO",
+		P(origin, 0, 0, 0)
 	)
 
-	local digitAdder=Adder16.Build(
-		name.."_DIGIT_ADD",
-		P(origin,0,32)
+	self.Register = Register16.Build(
+		name .. "_REGISTER",
+		P(origin, 20, 0, 0)
 	)
 
-	local register=Register16.Build(
-		name.."_REGISTER",
-		P(origin,0,64)
+	self.Multiply10Adder = Adder16.Build(
+		name .. "_MULTIPLY_10",
+		P(origin, 260, 0, 0)
 	)
 
-	local shiftLeft1={}
-	local shiftLeft3={}
-	local digit16={}
+	self.DigitAdder = Adder16.Build(
+		name .. "_DIGIT_ADDER",
+		P(origin, 520, 0, 0)
+	)
 
-	for bit=0,15 do
-		shiftLeft1[bit]=nil
-		shiftLeft3[bit]=nil
-		digit16[bit]=nil
-	end
+	self.ShiftLeft1 = {}
+	self.ShiftLeft3 = {}
+	self.ExtendedDigit = {}
 
-	function DecimalInput.ConnectCurrentBus(currentBus,zeroSource)
-
-		for bit=0,15 do
-
-			if bit>=1 then
-				shiftLeft1[bit]=currentBus[bit-1]
-			else
-				shiftLeft1[bit]=zeroSource
-			end
-
-			if bit>=3 then
-				shiftLeft3[bit]=currentBus[bit-3]
-			else
-				shiftLeft3[bit]=zeroSource
-			end
-
+	for bit = 0, 15 do
+		if bit >= 1 then
+			self.ShiftLeft1[bit] =
+				self.Register.Q[bit - 1]
+		else
+			self.ShiftLeft1[bit] =
+				self.Zero
 		end
 
-		multiplyAdder.ConnectABus(shiftLeft1)
-		multiplyAdder.ConnectBBus(shiftLeft3)
-		multiplyAdder.ConnectCarryIn(zeroSource)
-
-	end
-
-	function DecimalInput.ConnectDigitBus(digitBus,zeroSource)
-
-		for bit=0,15 do
-
-			if bit<=3 then
-				digit16[bit]=digitBus[bit]
-			else
-				digit16[bit]=zeroSource
-			end
-
+		if bit >= 3 then
+			self.ShiftLeft3[bit] =
+				self.Register.Q[bit - 3]
+		else
+			self.ShiftLeft3[bit] =
+				self.Zero
 		end
 
-		digitAdder.ConnectABus(
-			multiplyAdder.Sum
-		)
-
-		digitAdder.ConnectBBus(
-			digit16
-		)
-
-		digitAdder.ConnectCarryIn(
-			zeroSource
-		)
-
+		self.ExtendedDigit[bit] =
+			self.Zero
 	end
 
-	function DecimalInput.ConnectClock(clockSource)
+	self.Multiply10Adder.ConnectABus(
+		self.ShiftLeft1
+	)
 
-		register.ConnectData(
-			digitAdder.Sum
+	self.Multiply10Adder.ConnectBBus(
+		self.ShiftLeft3
+	)
+
+	self.Multiply10Adder.ConnectCarryIn(
+		self.Zero
+	)
+
+	self.DigitAdder.ConnectABus(
+		self.Multiply10Adder.Sum
+	)
+
+	self.DigitAdder.ConnectBBus(
+		self.ExtendedDigit
+	)
+
+	self.DigitAdder.ConnectCarryIn(
+		self.Zero
+	)
+
+	self.Register.ConnectData(
+		self.DigitAdder.Sum
+	)
+
+	function self.ConnectDigitBus(digitBus)
+		assert(
+			type(digitBus) == "table",
+			"4비트 숫자 입력 버스가 필요합니다."
 		)
 
-		register.ConnectClock(
-			clockSource
-		)
+		for bit = 0, 3 do
+			assert(
+				digitBus[bit],
+				"숫자 입력 비트 누락: " .. bit
+			)
 
+			self.ExtendedDigit[bit] =
+				digitBus[bit]
+
+			self.DigitAdder.Adders[bit].ConnectB(
+				digitBus[bit]
+			)
+		end
 	end
 
-	return{
-		Output=register.Q,
-		OutputInverse=register.QB,
-		MultiplyResult=multiplyAdder.Sum,
-		DigitResult=digitAdder.Sum,
-		Register=register,
-		ConnectCurrentBus=DecimalInput.ConnectCurrentBus,
-		ConnectDigitBus=DecimalInput.ConnectDigitBus,
-		ConnectClock=DecimalInput.ConnectClock
-	}
+	function self.ConnectClock(source)
+		assert(
+			source,
+			"숫자 입력 클럭이 필요합니다."
+		)
 
+		self.Register.ConnectClock(source)
+	end
+
+	self.Output = self.Register.Q
+	self.OutputInverse = self.Register.QB
+
+	return self
 end
 
-Context.Modules.DecimalInput=DecimalInput
+Context.Modules.DecimalInput = DecimalInput
 
 return DecimalInput
