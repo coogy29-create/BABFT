@@ -1,47 +1,32 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local Gates=Context.Modules.Gates
-local Wiring=Context.Modules.Wiring
-local Components=Context.Modules.Components
+local DLatch = Context.Modules.DLatch
 
-local Register1={}
+local Register1 = {}
 
-local function P(origin,x,z)
-
-	return CFrame.new(
-		origin.Position+
-		Vector3.new(x,0,z)
+function Register1.Build(name, origin)
+	local latch = DLatch.Build(
+		name .. "_LATCH",
+		origin
 	)
 
-end
+	local function connectData(source)
+		latch.ConnectData(source)
+	end
 
-function Register1.Build(name,origin)
+	local function connectClock(source)
+		latch.ConnectEnable(source)
+	end
 
-	local latch=Components.DLatch(
-		name.."_DLATCH",
-		P(origin,0,0)
-	)
-
-	Wiring.Connect(
-		name.."_D",
-		name.."_DLATCH_D"
-	)
-
-	Wiring.Connect(
-		name.."_CLK",
-		name.."_DLATCH_CLK"
-	)
-
-	return{
-
-		Q=latch.Q,
-
-		QB=latch.QB
-
+	return {
+		Q = latch.Q,
+		QB = latch.QB,
+		Latch = latch,
+		ConnectData = connectData,
+		ConnectClock = connectClock
 	}
-
 end
 
-Context.Modules.Register1=Register1
+Context.Modules.Register1 = Register1
 
 return Register1
