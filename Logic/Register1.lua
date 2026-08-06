@@ -10,21 +10,31 @@ function Register1.Build(name, origin)
 		origin
 	)
 
-	local function connectData(source)
+	local self = {}
+
+	function self.ConnectData(source)
+		assert(
+			source,
+			"데이터 입력이 필요합니다."
+		)
+
 		latch.ConnectData(source)
 	end
 
-	local function connectClock(source)
+	function self.ConnectClock(source)
+		assert(
+			source,
+			"클럭 입력이 필요합니다."
+		)
+
 		latch.ConnectEnable(source)
 	end
 
-	return {
-		Q = latch.Q,
-		QB = latch.QB,
-		Latch = latch,
-		ConnectData = connectData,
-		ConnectClock = connectClock
-	}
+	self.Q = latch.Q
+	self.QB = latch.QB
+	self.Latch = latch
+
+	return self
 end
 
 Context.Modules.Register1 = Register1
