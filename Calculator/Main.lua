@@ -1,93 +1,33 @@
 local Context=getgenv().BABFT_CALCULATOR
 
-local DecimalInput=Context.Modules.DecimalInput
-local Adder16=Context.Modules.Adder16
-local Subtractor16=Context.Modules.Subtractor16
-local BinaryToBCD=Context.Modules.BinaryToBCD
-local DisplayDriver=Context.Modules.DisplayDriver
+local System=Context.Modules.CalculatorSystem
+local Project=Context.Modules.Project
 
-local Calculator={}
+local Main={}
 
-function Calculator.Build(origin)
+function Main.Build(origin)
 
-	local inputA=DecimalInput.Build(
-		"INPUT_A",
-		origin*CFrame.new(0,0,0)
+	origin=origin or CFrame.new(0,5,0)
+
+	Project.Name="BABFT 16Bit Decimal Calculator"
+
+	Project.Version="1.0.0"
+
+	Project.Author="coogy29"
+
+	Project.SetRoot(origin)
+
+	local calculator=System.Build(
+		"CALCULATOR",
+		origin
 	)
 
-	local inputB=DecimalInput.Build(
-		"INPUT_B",
-		origin*CFrame.new(0,0,90)
-	)
+	Context.Calculator=calculator
 
-	local adder=Adder16.Build(
-		"ADDER16",
-		origin*CFrame.new(180,0,0)
-	)
-
-	local subtractor=Subtractor16.Build(
-		"SUB16",
-		origin*CFrame.new(180,0,120)
-	)
-
-	local bcd=BinaryToBCD.Build(
-		"BCD",
-		origin*CFrame.new(620,0,0)
-	)
-
-	local display=DisplayDriver.Build(
-		"DISPLAY",
-		origin*CFrame.new(900,0,0),
-		5
-	)
-
-	adder.ConnectABus(
-		inputA.Output
-	)
-
-	adder.ConnectBBus(
-		inputB.Output
-	)
-
-	subtractor.ConnectABus(
-		inputA.Output
-	)
-
-	subtractor.ConnectBBus(
-		inputB.Output
-	)
-
-	bcd.ConnectBinaryBus(
-		adder.Sum
-	)
-
-	for digit=1,5 do
-
-		display.ConnectDigit(
-			digit,
-			bcd.BCD[digit-1].Q
-		)
-
-	end
-
-	return{
-
-		InputA=inputA,
-
-		InputB=inputB,
-
-		Adder=adder,
-
-		Subtractor=subtractor,
-
-		BCD=bcd,
-
-		Display=display
-
-	}
+	return calculator
 
 end
 
-Context.Modules.Calculator=Calculator
+Context.Modules.Calculator=Main
 
-return Calculator
+return Main
