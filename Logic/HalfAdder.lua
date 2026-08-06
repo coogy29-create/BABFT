@@ -1,43 +1,79 @@
-local Context = getgenv().BABFT_CALCULATOR
+local Context=getgenv().BABFT_CALCULATOR
 
-local Gates = Context.Modules.Gates
+local Gates=Context.Modules.Gates
+local Wiring=Context.Modules.Wiring
 
-local HalfAdder = {}
+local HalfAdder={}
 
-function HalfAdder.Build(prefix, origin)
+local function P(origin,x,y,z)
+	return origin*CFrame.new(
+		x or 0,
+		y or 0,
+		z or 0
+	)
+end
 
-	local xorPos = origin
+function HalfAdder.Build(name,origin)
 
-	local andPos = origin + Vector3.new(0,0,4)
-
-	local xorGate = Gates.Xor(
-		prefix.."_SUM",
-		CFrame.new(xorPos)
+	local xorGate=Gates.Xor(
+		name.."_XOR",
+		P(origin,0,0,0)
 	)
 
-	local andGate = Gates.And(
-		prefix.."_CARRY",
-		CFrame.new(andPos)
+	local andGate=Gates.And(
+		name.."_AND",
+		P(origin,0,0,8)
 	)
 
-	return {
+	local inputA={}
+	local inputB={}
 
-		Sum = xorGate,
+	function HalfAdder.ConnectA(source)
 
-		Carry = andGate,
+		inputA[1]=source
 
-		InputA = xorGate,
+		Wiring.Connect(
+			source,
+			xorGate
+		)
 
-		InputB = xorGate,
+		Wiring.Connect(
+			source,
+			andGate
+		)
 
-		CarryInputA = andGate,
+	end
 
-		CarryInputB = andGate
+	function HalfAdder.ConnectB(source)
+
+		inputB[1]=source
+
+		Wiring.Connect(
+			source,
+			xorGate
+		)
+
+		Wiring.Connect(
+			source,
+			andGate
+		)
+
+	end
+
+	return{
+
+		Sum=xorGate,
+
+		Carry=andGate,
+
+		ConnectA=HalfAdder.ConnectA,
+
+		ConnectB=HalfAdder.ConnectB
 
 	}
 
 end
 
-Context.Modules.HalfAdder = HalfAdder
+Context.Modules.HalfAdder=HalfAdder
 
 return HalfAdder
