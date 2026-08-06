@@ -23,38 +23,37 @@ local function copyText(text)
 end
 
 local function getBuildingRemote()
-	local tool = Utils.WaitForTool(
-		Config.Tools.BuildingTool,
-		true,
-		10
+	local backpack = LocalPlayer:WaitForChild("Backpack")
+
+	local tool = backpack:FindFirstChild(
+		Config.Tools.BuildingTool
 	)
 
-	if not tool then
-		local character = LocalPlayer.Character
-		local backpack = LocalPlayer:FindFirstChild("Backpack")
+	if tool then
+		local remote = tool:FindFirstChild("RF")
 
-		tool =
-			(character and character:FindFirstChild(
-				Config.Tools.BuildingTool
-			))
-			or (backpack and backpack:FindFirstChild(
-				Config.Tools.BuildingTool
-			))
+		if remote then
+			return remote
+		end
 	end
 
-	assert(
-		tool,
-		"BuildingTool을 찾을 수 없습니다."
-	)
+	local character = LocalPlayer.Character
 
-	local remote = tool:FindFirstChild("RF")
+	if character then
+		tool = character:FindFirstChild(
+			Config.Tools.BuildingTool
+		)
 
-	assert(
-		remote,
-		"BuildingTool.RF를 찾을 수 없습니다."
-	)
+		if tool then
+			local remote = tool:FindFirstChild("RF")
 
-	return remote
+			if remote then
+				return remote
+			end
+		end
+	end
+
+	error("BuildingTool.RF를 찾을 수 없습니다.")
 end
 
 local function resolveInventoryValue(blockType)
@@ -318,25 +317,11 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 	local beforeCount = #folder:GetChildren()
 	local addedObjects = {}
 
-	print(
-		string.format(
-			"[Builder] %d번째 설치 | %s | %s",
-			Builder.PlaceIndex,
-			tostring(Builder.CurrentName),
-			tostring(blockName)
-		)
-	)
-
 	local childConnection =
 		folder.ChildAdded:Connect(function(object)
 			addedObjects[#addedObjects + 1] =
 				object
 
-			print(
-				"[Builder ChildAdded]",
-				object.Name,
-				object:GetFullName()
-			)
 		end)
 
 	local remote = getBuildingRemote()
@@ -387,10 +372,9 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 
 	Builder.LastInvokeDebug = invokeDebug
 
-	print(invokeDebug)
-	copyText(invokeDebug)
-
 	if not invokeSuccess then
+		copyText(invokeDebug)
+		warn(invokeDebug)
 		childConnection:Disconnect()
 
 		local errorText =
@@ -495,14 +479,6 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 	end
 
 	Context.Statistics.BlocksPlaced += 1
-
-	print(
-		string.format(
-			"[Builder] 감지 성공 | %s | %s",
-			tostring(Builder.CurrentName),
-			created:GetFullName()
-		)
-	)
 
 	return created
 end
