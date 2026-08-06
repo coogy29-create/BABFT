@@ -2,8 +2,7 @@ if not game:IsLoaded() then
 	game.Loaded:Wait()
 end
 
-local REPOSITORY =
-	"https://raw.githubusercontent.com/coogy29-create/BABFT/refs/heads/main/"
+local BASE = "https://raw.githubusercontent.com/coogy29-create/BABFT/main/"
 
 local FILES = {
 	"Core/Config.lua",
@@ -12,12 +11,18 @@ local FILES = {
 	"Core/Builder.lua",
 	"Core/Bind.lua",
 	"Core/Paint.lua",
-	"Core/UI.lua",
 
-	"Logic/GateLibrary.lua",
-	"Logic/Latch.lua",
-	"Logic/Register.lua",
-	"Logic/AdderSubtractor16.lua",
+	"Logic/Gates.lua",
+	"Logic/Wiring.lua",
+	"Logic/Circuit.lua",
+	"Logic/Components.lua",
+	"Logic/HalfAdder.lua",
+	"Logic/FullAdder.lua",
+	"Logic/DLatch.lua",
+	"Logic/Register1.lua",
+	"Logic/Register16.lua",
+	"Logic/Adder16.lua",
+	"Logic/Subtractor16.lua",
 	"Logic/DecimalInput.lua",
 	"Logic/BinaryToBCD.lua",
 
@@ -27,123 +32,35 @@ local FILES = {
 	"Calculator/Main.lua"
 }
 
-local Environment = getgenv()
+getgenv().BABFT_CALCULATOR = getgenv().BABFT_CALCULATOR or {}
 
-if Environment.BABFT_CALCULATOR
-	and Environment.BABFT_CALCULATOR.Running then
-	warn("BABFT 계산기 로더가 이미 실행 중입니다.")
-	return
-end
+local Context = getgenv().BABFT_CALCULATOR
 
-Environment.BABFT_CALCULATOR = {
-	Version = "0.1.0",
-	Running = true,
-	Modules = {},
-	State = {},
-	LoadedFiles = {},
-	BaseURL = REPOSITORY
-}
+Context.Modules = {}
+Context.State = {}
+Context.Ready = false
 
-local Context = Environment.BABFT_CALCULATOR
-
-local function downloadFile(fileName)
-	local url =
-		REPOSITORY
-		.. fileName
-		.. "?cache="
-		.. tostring(os.time())
-		.. "_"
-		.. tostring(math.random(100000, 999999))
-
-	local success, source = pcall(function()
-		return game:HttpGet(url)
-	end)
-
-	if not success then
-		error(
-			"파일 다운로드 실패\n"
-			.. fileName
-			.. "\n"
-			.. tostring(source)
-		)
-	end
-
-	if type(source) ~= "string" or source == "" then
-		error("빈 파일을 받았습니다: " .. fileName)
-	end
-
-	if source:find("404: Not Found", 1, true) then
-		error("GitHub에 파일이 없습니다: " .. fileName)
-	end
-
-	return source
-end
-
-local function executeFile(fileName, source)
-	local chunk, compileError = loadstring(
-		source,
-		"@BABFT/" .. fileName
-	)
+for _, file in ipairs(FILES) do
+	local source = game:HttpGet(BASE .. file .. "?t=" .. tostring(os.time()))
+	local chunk, err = loadstring(source, "@BABFT/" .. file)
 
 	if not chunk then
-		error(
-			"파일 컴파일 실패\n"
-			.. fileName
-			.. "\n"
-			.. tostring(compileError)
-		)
+		error("컴파일 실패 : " .. file .. "\n" .. tostring(err))
 	end
 
-	local success, result = pcall(chunk)
+	local ok, result = pcall(chunk)
 
-	if not success then
-		error(
-			"파일 실행 실패\n"
-			.. fileName
-			.. "\n"
-			.. tostring(result)
-		)
+	if not ok then
+		error("실행 실패 : " .. file .. "\n" .. tostring(result))
 	end
-
-	Context.LoadedFiles[fileName] = true
-
-	if result ~= nil then
-		Context.Modules[fileName] = result
-	end
-
-	return result
 end
 
-local success, errorMessage = xpcall(function()
-	for index, fileName in ipairs(FILES) do
-		print(
-			string.format(
-				"[BABFT] %d/%d 불러오는 중: %s",
-				index,
-				#FILES,
-				fileName
-			)
-		)
+Context.Ready = true
 
-		local source = downloadFile(fileName)
-		executeFile(fileName, source)
+local Main = Context.Modules.Calculator
 
-		task.wait()
-	end
-
-	Context.Running = false
-	Context.Ready = true
-
-	print("[BABFT] 16비트 계산기 모듈 로드 완료")
-end, debug.traceback)
-
-if not success then
-	Context.Running = false
-	Context.Ready = false
-	Context.LastError = errorMessage
-
-	warn(
-		"[BABFT] 로더 실행 실패\n"
-		.. tostring(errorMessage)
-	)
+if Main and Main.Build then
+	Main.Build(CFrame.new(0, 5, 0))
 end
+
+print("[BABFT] Calculator Loaded")
