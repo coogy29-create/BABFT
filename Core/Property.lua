@@ -8,12 +8,18 @@ local Property = {}
 local function getPropertyRemote()
 	local tool = Utils.WaitForTool(
 		Config.Tools.PropertiesTool,
-		true
+		true,
+		10
 	)
 
-	assert(tool, "PropertiesTool을 찾을 수 없습니다.")
+	assert(
+		tool,
+		"PropertiesTool을 찾을 수 없습니다."
+	)
 
-	local remote = tool:FindFirstChild("SetPropertieRF")
+	local remote = tool:FindFirstChild(
+		"SetPropertieRF"
+	)
 
 	assert(
 		remote,
@@ -31,8 +37,9 @@ local function resolveObject(object)
 	local found = Context:GetObject(object)
 
 	assert(
-		found,
-		"등록되지 않은 객체: " .. tostring(object)
+		found and found.Parent,
+		"등록되지 않은 Gate: "
+			.. tostring(object)
 	)
 
 	return found
@@ -41,16 +48,20 @@ end
 function Property.Set(gateType, objects)
 	assert(
 		Config.GateTypes[gateType],
-		"지원하지 않는 Gate 종류: " .. tostring(gateType)
+		"지원하지 않는 Gate 종류: "
+			.. tostring(gateType)
+	)
+
+	assert(
+		type(objects) == "table",
+		"objects는 테이블이어야 합니다."
 	)
 
 	local targets = {}
 
 	for _, object in ipairs(objects) do
-		table.insert(
-			targets,
+		targets[#targets + 1] =
 			resolveObject(object)
-		)
 	end
 
 	if #targets == 0 then
@@ -68,20 +79,22 @@ function Property.Set(gateType, objects)
 
 	if not success then
 		error(
-			"Gate 종류 변경 실패\n"
-			.. tostring(gateType)
-			.. "\n"
-			.. tostring(result)
+			"Gate 종류 변경 실패: "
+				.. tostring(gateType)
+				.. "\n"
+				.. tostring(result)
 		)
 	end
 
 	Context.Statistics.PropertiesChanged += #targets
 
 	task.wait(Config.PropertyDelay)
+
+	return result
 end
 
 function Property.SetOne(gateType, object)
-	Property.Set(
+	return Property.Set(
 		gateType,
 		{object}
 	)
@@ -95,15 +108,17 @@ function Property.ProcessQueue()
 		Not = {}
 	}
 
-	for _, data in ipairs(Context.PropertyQueue) do
+	for _, data in ipairs(
+		Context.PropertyQueue
+	) do
 		local gateType = data.Type
-		local object = data.Gate or data.Object
+		local object =
+			data.Gate or data.Object
 
-		if gateType and object then
-			table.insert(
-				grouped[gateType],
-				object
-			)
+		if grouped[gateType] and object then
+			grouped[gateType][
+				#grouped[gateType] + 1
+			] = object
 		end
 	end
 
@@ -114,15 +129,10 @@ function Property.ProcessQueue()
 		"Not"
 	}
 
-	for index, gateType in ipairs(order) do
+	for _, gateType in ipairs(order) do
 		if Utils.IsCancelled() then
 			break
 		end
-
-		Utils.SetTask(
-			"Gate 종류 설정: " .. gateType,
-			index / #order
-		)
 
 		if #grouped[gateType] > 0 then
 			Property.Set(
