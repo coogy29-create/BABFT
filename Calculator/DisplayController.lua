@@ -1,58 +1,65 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local DisplayDriver=Context.Modules.DisplayDriver
-local BinaryToBCD=Context.Modules.BinaryToBCD
+local BinaryToBCD = Context.Modules.BinaryToBCD
+local DisplayDriver = Context.Modules.DisplayDriver
 
-local DisplayController={}
+local DisplayController = {}
 
-local function P(origin,x,y,z)
-	return origin*CFrame.new(
+local function P(origin, x, y, z)
+	return origin * CFrame.new(
 		x or 0,
 		y or 0,
 		z or 0
 	)
 end
 
-function DisplayController.Build(name,origin,resultBus,clock)
+function DisplayController.Build(name, origin, binaryBus, clock)
 
-	local converter=BinaryToBCD.Build(
-		name.."_CONVERTER",
-		P(origin,0,0,0)
+	local converter = BinaryToBCD.Build(
+		name .. "_BCD",
+		P(origin, 0, 0, 0)
 	)
 
-	local display=DisplayDriver.Build(
-		name.."_DISPLAY",
-		P(origin,260,0,0),
+	local display = DisplayDriver.Build(
+		name .. "_DISPLAY",
+		P(origin, 340, 0, 0),
 		5
 	)
 
 	converter.ConnectBinaryBus(
-		resultBus
+		binaryBus
 	)
 
-	converter.ConnectClock(
+	converter.ConnectLoad(
 		clock
 	)
 
-	for digit=0,4 do
+	converter.ConnectStep(
+		converter.StepDelay
+	)
+
+	for digit = 0, 4 do
 
 		display.ConnectDigit(
-			digit+1,
-			converter.BCD[digit].Q
+
+			digit + 1,
+
+			converter.Digits[digit]
+
 		)
 
 	end
 
-	return{
+	return {
 
-		Converter=converter,
+		Converter = converter,
 
-		Display=display
+		Display = display
 
 	}
 
 end
 
-Context.Modules.DisplayController=DisplayController
+Context.Modules.DisplayController = DisplayController
 
 return DisplayController
