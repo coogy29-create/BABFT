@@ -68,6 +68,7 @@ Config.AutoProperty = true
 Config.Layout = {
 	GridSpacing = 2,
 	BusSpacing = 2,
+
 	GateSpacing = 2.5,
 	RegisterSpacing = 10,
 	ModuleSpacing = 18,
@@ -78,7 +79,9 @@ Config.Layout = {
 	DepthScale = 0.22,
 
 	LayerHeight = 3.2,
-	LayerCount = 100
+	LayerCount = 100,
+
+	GridWidth = 8
 }
 
 function Config.Layout.GetLayeredOffset(index)
@@ -87,18 +90,34 @@ function Config.Layout.GetLayeredOffset(index)
 		math.floor(index or 0)
 	)
 
-	local layer =
-		index % Config.Layout.LayerCount
+	local layerCount =
+		Config.Layout.LayerCount or 100
 
-	local slot =
-		math.floor(
-			index / Config.Layout.LayerCount
-		)
+	local gridWidth =
+		Config.Layout.GridWidth or 8
+
+	local gateSpacing =
+		Config.Layout.GateSpacing or 2.5
+
+	local layerHeight =
+		Config.Layout.LayerHeight or 3.2
+
+	local layer =
+		index % layerCount
+
+	local slice =
+		math.floor(index / layerCount)
+
+	local gridX =
+		slice % gridWidth
+
+	local gridZ =
+		math.floor(slice / gridWidth)
 
 	return Vector3.new(
-		slot * Config.Layout.GateSpacing,
-		layer * Config.Layout.LayerHeight,
-		0
+		gridX * gateSpacing,
+		layer * layerHeight,
+		gridZ * gateSpacing
 	)
 end
 
@@ -118,7 +137,27 @@ function Config.Layout.GetLayeredCFrame(
 	return origin * CFrame.new(
 		offset.X,
 		offset.Y,
-		depth or 0
+		offset.Z + (depth or 0)
+	)
+end
+
+function Config.Layout.GetLayeredPosition(
+	originPosition,
+	index,
+	depth
+)
+	assert(
+		typeof(originPosition) == "Vector3",
+		"originPosition은 Vector3이어야 합니다."
+	)
+
+	local offset =
+		Config.Layout.GetLayeredOffset(index)
+
+	return originPosition + Vector3.new(
+		offset.X,
+		offset.Y,
+		offset.Z + (depth or 0)
 	)
 end
 
