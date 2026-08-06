@@ -1,5 +1,6 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Config = Context.Config
 local Builder = Context.Modules.Builder
 local Binder = Context.Modules.Bind
 local Gates = Context.Modules.Gates
@@ -18,6 +19,14 @@ local function P(origin, x, y, z)
 	)
 end
 
+local function L(origin, index)
+	return Config.Layout.GetLayeredCFrame(
+		origin,
+		index,
+		0
+	)
+end
+
 local function createButton(name, cframe)
 	local button = Builder.PlaceNamedBlock(
 		name,
@@ -30,77 +39,158 @@ local function createButton(name, cframe)
 	return button
 end
 
-function CalculatorController.Build(name, origin, keypad)
+function CalculatorController.Build(
+	name,
+	origin,
+	keypad
+)
 	local self = {}
+
+	local gateSpacing =
+		Config.Layout.GateSpacing
 
 	self.CurrentInput = DecimalInput.Build(
 		name .. "_CURRENT_INPUT",
-		P(origin, 0, 0, 0)
+		P(
+			origin,
+			0,
+			0,
+			0
+		)
 	)
 
 	self.OperandA = Register16.Build(
 		name .. "_OPERAND_A",
-		P(origin, 820, 0, 0)
+		P(
+			origin,
+			gateSpacing * 11,
+			0,
+			0
+		)
 	)
 
 	self.Arithmetic = Subtractor16.Build(
 		name .. "_ARITHMETIC",
-		P(origin, 1080, 0, 0)
+		P(
+			origin,
+			gateSpacing * 15,
+			0,
+			0
+		)
 	)
 
 	self.ResultRegister = Register16.Build(
 		name .. "_RESULT",
-		P(origin, 1380, 0, 0)
+		P(
+			origin,
+			gateSpacing * 20,
+			0,
+			0
+		)
 	)
+
+	local buttonOrigin = P(
+		origin,
+		0,
+		0,
+		14
+	)
+
+	local buttonSpacing = 3
 
 	self.AddButton = createButton(
 		name .. "_BUTTON_ADD",
-		P(origin, -24, 0, 20)
+		P(
+			buttonOrigin,
+			0,
+			0,
+			0
+		)
 	)
 
 	self.SubtractButton = createButton(
 		name .. "_BUTTON_SUBTRACT",
-		P(origin, -16, 0, 20)
+		P(
+			buttonOrigin,
+			buttonSpacing,
+			0,
+			0
+		)
 	)
 
 	self.EqualsButton = createButton(
 		name .. "_BUTTON_EQUALS",
-		P(origin, -8, 0, 20)
+		P(
+			buttonOrigin,
+			buttonSpacing * 2,
+			0,
+			0
+		)
 	)
 
 	self.ClearButton = createButton(
 		name .. "_BUTTON_CLEAR",
-		P(origin, 0, 0, 20)
+		P(
+			buttonOrigin,
+			buttonSpacing * 3,
+			0,
+			0
+		)
+	)
+
+	local controlOrigin = P(
+		origin,
+		gateSpacing * 24,
+		0,
+		0
 	)
 
 	self.SubtractSet = Gates.Or(
 		name .. "_SUBTRACT_SET",
-		P(origin, 960, 0, 0)
+		L(
+			controlOrigin,
+			0
+		)
 	)
 
 	self.SubtractReset = Gates.Or(
 		name .. "_SUBTRACT_RESET",
-		P(origin, 960, 0, 16)
+		L(
+			controlOrigin,
+			1
+		)
 	)
 
 	self.SubtractQOr = Gates.Or(
 		name .. "_SUBTRACT_Q_OR",
-		P(origin, 980, 0, 0)
+		L(
+			controlOrigin,
+			2
+		)
 	)
 
 	self.SubtractQ = Gates.Not(
 		name .. "_SUBTRACT_Q",
-		P(origin, 994, 0, 0)
+		L(
+			controlOrigin,
+			3
+		)
 	)
 
 	self.SubtractQBOr = Gates.Or(
 		name .. "_SUBTRACT_QB_OR",
-		P(origin, 980, 0, 16)
+		L(
+			controlOrigin,
+			4
+		)
 	)
 
 	self.SubtractQB = Gates.Not(
 		name .. "_SUBTRACT_QB",
-		P(origin, 994, 0, 16)
+		L(
+			controlOrigin,
+			5
+		)
 	)
 
 	Wiring.Connect(
@@ -188,13 +278,19 @@ function CalculatorController.Build(name, origin, keypad)
 		self.EqualsButton
 	)
 
-	self.Result = self.ResultRegister.Q
-	self.ResultInverse = self.ResultRegister.QB
-	self.SubtractMode = self.SubtractQ
+	self.Result =
+		self.ResultRegister.Q
+
+	self.ResultInverse =
+		self.ResultRegister.QB
+
+	self.SubtractMode =
+		self.SubtractQ
 
 	return self
 end
 
-Context.Modules.CalculatorController = CalculatorController
+Context.Modules.CalculatorController =
+	CalculatorController
 
 return CalculatorController
