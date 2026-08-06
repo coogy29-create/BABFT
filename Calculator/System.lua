@@ -1,53 +1,48 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local KeypadEncoder=Context.Modules.KeypadEncoder
-local CalculatorController=Context.Modules.CalculatorController
-local DisplayController=Context.Modules.DisplayController
+local KeypadEncoder = Context.Modules.KeypadEncoder
+local CalculatorController = Context.Modules.CalculatorController
+local DisplayController = Context.Modules.DisplayController
 
-local System={}
+local CalculatorSystem = {}
 
-local function P(origin,x,y,z)
-	return origin*CFrame.new(
+local function P(origin, x, y, z)
+	return origin * CFrame.new(
 		x or 0,
 		y or 0,
 		z or 0
 	)
 end
 
-function System.Build(name,origin)
+function CalculatorSystem.Build(name, origin)
 
-	local keypad=KeypadEncoder.Build(
-		name.."_KEYPAD",
-		P(origin,0,0,0)
+	local self = {}
+
+	self.Keypad = KeypadEncoder.Build(
+		name .. "_KEYPAD",
+		P(origin, 0, 0, 0)
 	)
 
-	local controller=CalculatorController.Build(
-		name.."_CONTROLLER",
-		P(origin,80,0,0),
-		keypad
+	self.Controller = CalculatorController.Build(
+		name .. "_CONTROLLER",
+		P(origin, 120, 0, 0),
+		self.Keypad
 	)
 
-	local display=DisplayController.Build(
-		name.."_OUTPUT",
-		P(origin,1500,0,0),
-		controller.ResultRegister.Q,
-		controller.EqualsButton
+	self.Display = DisplayController.Build(
+		name .. "_DISPLAY",
+		P(origin, 1700, 0, 0),
+		self.Controller.Result,
+		self.Keypad.Pulse
 	)
 
-	local result={
-		Name=name,
-		Origin=origin,
-		Keypad=keypad,
-		Controller=controller,
-		Display=display
-	}
+	self.Result = self.Controller.Result
+	self.KeypadOutput = self.Keypad.DigitBus
 
-	Context.System=result
-	Context.Modules.System=result
+	return self
 
-	return result
 end
 
-Context.Modules.CalculatorSystem=System
+Context.Modules.CalculatorSystem = CalculatorSystem
 
-return System
+return CalculatorSystem
