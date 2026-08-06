@@ -4,10 +4,9 @@ local Builder = Context.Modules.Builder
 local Binder = Context.Modules.Bind
 local Gates = Context.Modules.Gates
 local Wiring = Context.Modules.Wiring
-local DecimalAccumulator = Context.Modules.DecimalAccumulator
+local DecimalInput = Context.Modules.DecimalInput
 local Register16 = Context.Modules.Register16
 local Subtractor16 = Context.Modules.Subtractor16
-local BinaryToBCD = Context.Modules.BinaryToBCD
 
 local CalculatorController = {}
 
@@ -19,137 +18,181 @@ local function P(origin, x, y, z)
 	)
 end
 
+local function createButton(name, cframe)
+	local button = Builder.PlaceNamedBlock(
+		name,
+		"Button",
+		cframe
+	)
+
+	Binder.AutoUnbindNearest(button)
+
+	return button
+end
+
 function CalculatorController.Build(name, origin, keypad)
-	local currentInput = DecimalAccumulator.Build(
+	local self = {}
+
+	self.CurrentInput = DecimalInput.Build(
 		name .. "_CURRENT_INPUT",
 		P(origin, 0, 0, 0)
 	)
 
-	local operandA = Register16.Build(
+	self.OperandA = Register16.Build(
 		name .. "_OPERAND_A",
-		P(origin, 260, 0, 0)
+		P(origin, 820, 0, 0)
 	)
 
-	local arithmetic = Subtractor16.Build(
+	self.Arithmetic = Subtractor16.Build(
 		name .. "_ARITHMETIC",
-		P(origin, 520, 0, 0)
+		P(origin, 1080, 0, 0)
 	)
 
-	local resultRegister = Register16.Build(
+	self.ResultRegister = Register16.Build(
 		name .. "_RESULT",
-		P(origin, 920, 0, 0)
+		P(origin, 1380, 0, 0)
 	)
 
-	local bcd = BinaryToBCD.Build(
-		name .. "_BCD",
-		P(origin, 1180, 0, 0)
-	)
-
-	local addButton = Builder.PlaceNamedBlock(
+	self.AddButton = createButton(
 		name .. "_BUTTON_ADD",
-		"Button",
-		P(origin, -20, 0, 18)
+		P(origin, -24, 0, 20)
 	)
 
-	local subtractButton = Builder.PlaceNamedBlock(
+	self.SubtractButton = createButton(
 		name .. "_BUTTON_SUBTRACT",
-		"Button",
-		P(origin, -14, 0, 18)
+		P(origin, -16, 0, 20)
 	)
 
-	local equalsButton = Builder.PlaceNamedBlock(
+	self.EqualsButton = createButton(
 		name .. "_BUTTON_EQUALS",
-		"Button",
-		P(origin, -8, 0, 18)
+		P(origin, -8, 0, 20)
 	)
 
-	local clearButton = Builder.PlaceNamedBlock(
+	self.ClearButton = createButton(
 		name .. "_BUTTON_CLEAR",
-		"Button",
-		P(origin, -2, 0, 18)
+		P(origin, 0, 0, 20)
 	)
 
-	Binder.AutoUnbindNearest(addButton)
-	Binder.AutoUnbindNearest(subtractButton)
-	Binder.AutoUnbindNearest(equalsButton)
-	Binder.AutoUnbindNearest(clearButton)
-
-	local subtractState = Gates.Or(
-		name .. "_SUBTRACT_STATE",
-		P(origin, 430, 0, 20)
+	self.SubtractSet = Gates.Or(
+		name .. "_SUBTRACT_SET",
+		P(origin, 960, 0, 0)
 	)
 
-	currentInput.ConnectDigit(
-		keypad.DigitBus
+	self.SubtractReset = Gates.Or(
+		name .. "_SUBTRACT_RESET",
+		P(origin, 960, 0, 16)
 	)
 
-	currentInput.ConnectClock(
-		keypad.Pulse
+	self.SubtractQOr = Gates.Or(
+		name .. "_SUBTRACT_Q_OR",
+		P(origin, 980, 0, 0)
 	)
 
-	operandA.ConnectData(
-		currentInput.Result
+	self.SubtractQ = Gates.Not(
+		name .. "_SUBTRACT_Q",
+		P(origin, 994, 0, 0)
 	)
 
-	operandA.ConnectClock(
-		addButton
+	self.SubtractQBOr = Gates.Or(
+		name .. "_SUBTRACT_QB_OR",
+		P(origin, 980, 0, 16)
 	)
 
-	operandA.ConnectClock(
-		subtractButton
-	)
-
-	arithmetic.ConnectABus(
-		operandA.Q
-	)
-
-	arithmetic.ConnectBBus(
-		currentInput.Result
-	)
-
-	arithmetic.ConnectSubtract(
-		subtractState
+	self.SubtractQB = Gates.Not(
+		name .. "_SUBTRACT_QB",
+		P(origin, 994, 0, 16)
 	)
 
 	Wiring.Connect(
-		subtractButton,
-		subtractState
+		self.SubtractReset,
+		self.SubtractQOr
 	)
 
-	resultRegister.ConnectData(
-		arithmetic.Sum
+	Wiring.Connect(
+		self.SubtractSet,
+		self.SubtractQBOr
 	)
 
-	resultRegister.ConnectClock(
-		equalsButton
+	Wiring.Connect(
+		self.SubtractQOr,
+		self.SubtractQ
 	)
 
-	bcd.ConnectBinaryBus(
-		resultRegister.Q
+	Wiring.Connect(
+		self.SubtractQBOr,
+		self.SubtractQB
 	)
 
-	bcd.ConnectClock(
-		equalsButton
+	Wiring.Connect(
+		self.SubtractQ,
+		self.SubtractQBOr
 	)
 
-	currentInput.Clear(
-		clearButton
+	Wiring.Connect(
+		self.SubtractQB,
+		self.SubtractQOr
 	)
 
-	return {
-		CurrentInput = currentInput,
-		OperandA = operandA,
-		Arithmetic = arithmetic,
-		ResultRegister = resultRegister,
-		BCD = bcd,
+	Wiring.Connect(
+		self.SubtractButton,
+		self.SubtractSet
+	)
 
-		AddButton = addButton,
-		SubtractButton = subtractButton,
-		EqualsButton = equalsButton,
-		ClearButton = clearButton,
+	Wiring.Connect(
+		self.AddButton,
+		self.SubtractReset
+	)
 
-		SubtractState = subtractState
-	}
+	Wiring.Connect(
+		self.ClearButton,
+		self.SubtractReset
+	)
+
+	self.CurrentInput.ConnectDigitBus(
+		keypad.DigitBus
+	)
+
+	self.CurrentInput.ConnectClock(
+		keypad.Pulse
+	)
+
+	self.OperandA.ConnectData(
+		self.CurrentInput.Output
+	)
+
+	self.OperandA.ConnectClock(
+		self.AddButton
+	)
+
+	self.OperandA.ConnectClock(
+		self.SubtractButton
+	)
+
+	self.Arithmetic.ConnectABus(
+		self.OperandA.Q
+	)
+
+	self.Arithmetic.ConnectBBus(
+		self.CurrentInput.Output
+	)
+
+	self.Arithmetic.ConnectSubtract(
+		self.SubtractQ
+	)
+
+	self.ResultRegister.ConnectData(
+		self.Arithmetic.Sum
+	)
+
+	self.ResultRegister.ConnectClock(
+		self.EqualsButton
+	)
+
+	self.Result = self.ResultRegister.Q
+	self.ResultInverse = self.ResultRegister.QB
+	self.SubtractMode = self.SubtractQ
+
+	return self
 end
 
 Context.Modules.CalculatorController = CalculatorController
