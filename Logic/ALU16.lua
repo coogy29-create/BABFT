@@ -1,25 +1,27 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Config = Context.Config
 local Gates = Context.Modules.Gates
 local Wiring = Context.Modules.Wiring
 local Subtractor16 = Context.Modules.Subtractor16
 
 local ALU16 = {}
 
-local function P(origin, x, y, z)
-	return origin * CFrame.new(
-		x or 0,
-		y or 0,
-		z or 0
-	)
-end
-
 function ALU16.Build(name, origin)
 	local self = {}
 
+	local gateSpacing =
+		Config.Layout.GateSpacing
+
+	local layerHeight =
+		Config.Layout.LayerHeight
+
+	local layerCount =
+		Config.Layout.LayerCount
+
 	self.Arithmetic = Subtractor16.Build(
 		name .. "_ARITHMETIC",
-		P(origin, 0, 0, 0)
+		origin
 	)
 
 	self.AndBus = {}
@@ -34,61 +36,80 @@ function ALU16.Build(name, origin)
 	self.SelectXor = {}
 	self.SelectNot = {}
 
+	local function getGateCFrame(
+		bit,
+		localIndex
+	)
+		local globalIndex =
+			bit * 10 + localIndex
+
+		local layer =
+			globalIndex % layerCount
+
+		local column =
+			math.floor(
+				globalIndex / layerCount
+			)
+
+		return origin * CFrame.new(
+			(column + 6) * gateSpacing,
+			layer * layerHeight,
+			0
+		)
+	end
+
 	for bit = 0, 15 do
-		local column = bit % 4
-		local row = math.floor(bit / 4)
-
-		local x = column * 72
-		local z = row * 82
-
 		self.AndBus[bit] = Gates.And(
 			name .. "_AND_" .. bit,
-			P(origin, x, 0, z + 34)
+			getGateCFrame(bit, 0)
 		)
 
 		self.OrBus[bit] = Gates.Or(
 			name .. "_OR_" .. bit,
-			P(origin, x, 0, z + 42)
+			getGateCFrame(bit, 1)
 		)
 
 		self.XorBus[bit] = Gates.Xor(
 			name .. "_XOR_" .. bit,
-			P(origin, x, 0, z + 50)
+			getGateCFrame(bit, 2)
 		)
 
 		self.NotBus[bit] = Gates.Not(
 			name .. "_NOT_" .. bit,
-			P(origin, x, 0, z + 58)
+			getGateCFrame(bit, 3)
 		)
 
-		self.SelectArithmetic[bit] = Gates.And(
-			name .. "_SELECT_ARITHMETIC_" .. bit,
-			P(origin, x + 18, 0, z + 34)
-		)
+		self.SelectArithmetic[bit] =
+			Gates.And(
+				name
+					.. "_SELECT_ARITHMETIC_"
+					.. bit,
+				getGateCFrame(bit, 4)
+			)
 
 		self.SelectAnd[bit] = Gates.And(
 			name .. "_SELECT_AND_" .. bit,
-			P(origin, x + 18, 0, z + 42)
+			getGateCFrame(bit, 5)
 		)
 
 		self.SelectOr[bit] = Gates.And(
 			name .. "_SELECT_OR_" .. bit,
-			P(origin, x + 18, 0, z + 50)
+			getGateCFrame(bit, 6)
 		)
 
 		self.SelectXor[bit] = Gates.And(
 			name .. "_SELECT_XOR_" .. bit,
-			P(origin, x + 18, 0, z + 58)
+			getGateCFrame(bit, 7)
 		)
 
 		self.SelectNot[bit] = Gates.And(
 			name .. "_SELECT_NOT_" .. bit,
-			P(origin, x + 18, 0, z + 66)
+			getGateCFrame(bit, 8)
 		)
 
 		self.Result[bit] = Gates.Or(
 			name .. "_RESULT_" .. bit,
-			P(origin, x + 36, 0, z + 50)
+			getGateCFrame(bit, 9)
 		)
 
 		Wiring.Connect(
@@ -153,7 +174,8 @@ function ALU16.Build(name, origin)
 		for bit = 0, 15 do
 			assert(
 				bus[bit],
-				"A 입력 비트 누락: " .. bit
+				"A 입력 비트 누락: "
+					.. tostring(bit)
 			)
 
 			Wiring.Connect(
@@ -189,7 +211,8 @@ function ALU16.Build(name, origin)
 		for bit = 0, 15 do
 			assert(
 				bus[bit],
-				"B 입력 비트 누락: " .. bit
+				"B 입력 비트 누락: "
+					.. tostring(bit)
 			)
 
 			Wiring.Connect(
@@ -210,10 +233,24 @@ function ALU16.Build(name, origin)
 	end
 
 	function self.ConnectSubtract(source)
-		self.Arithmetic.ConnectSubtract(source)
+		assert(
+			source,
+			"감산 선택 신호가 필요합니다."
+		)
+
+		self.Arithmetic.ConnectSubtract(
+			source
+		)
 	end
 
-	function self.ConnectSelectArithmetic(source)
+	function self.ConnectSelectArithmetic(
+		source
+	)
+		assert(
+			source,
+			"산술 선택 신호가 필요합니다."
+		)
+
 		for bit = 0, 15 do
 			Wiring.Connect(
 				source,
@@ -223,6 +260,11 @@ function ALU16.Build(name, origin)
 	end
 
 	function self.ConnectSelectAnd(source)
+		assert(
+			source,
+			"AND 선택 신호가 필요합니다."
+		)
+
 		for bit = 0, 15 do
 			Wiring.Connect(
 				source,
@@ -232,6 +274,11 @@ function ALU16.Build(name, origin)
 	end
 
 	function self.ConnectSelectOr(source)
+		assert(
+			source,
+			"OR 선택 신호가 필요합니다."
+		)
+
 		for bit = 0, 15 do
 			Wiring.Connect(
 				source,
@@ -241,6 +288,11 @@ function ALU16.Build(name, origin)
 	end
 
 	function self.ConnectSelectXor(source)
+		assert(
+			source,
+			"XOR 선택 신호가 필요합니다."
+		)
+
 		for bit = 0, 15 do
 			Wiring.Connect(
 				source,
@@ -250,6 +302,11 @@ function ALU16.Build(name, origin)
 	end
 
 	function self.ConnectSelectNot(source)
+		assert(
+			source,
+			"NOT 선택 신호가 필요합니다."
+		)
+
 		for bit = 0, 15 do
 			Wiring.Connect(
 				source,
@@ -258,8 +315,11 @@ function ALU16.Build(name, origin)
 		end
 	end
 
-	self.CarryOut = self.Arithmetic.CarryOut
-	self.Negative = self.Result[15]
+	self.CarryOut =
+		self.Arithmetic.CarryOut
+
+	self.Negative =
+		self.Result[15]
 
 	return self
 end
