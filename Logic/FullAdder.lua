@@ -1,33 +1,34 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Config = Context.Config
 local HalfAdder = Context.Modules.HalfAdder
 local Gates = Context.Modules.Gates
 local Wiring = Context.Modules.Wiring
 
 local FullAdder = {}
 
-local function P(origin, x, y, z)
-	return origin * CFrame.new(
-		x or 0,
-		y or 0,
-		z or 0
+local function L(origin, index)
+	return Config.Layout.GetLayeredCFrame(
+		origin,
+		index,
+		0
 	)
 end
 
 function FullAdder.Build(name, origin)
 	local halfAdder1 = HalfAdder.Build(
 		name .. "_HA1",
-		P(origin, 0, 0, 0)
+		L(origin, 0)
 	)
 
 	local halfAdder2 = HalfAdder.Build(
 		name .. "_HA2",
-		P(origin, 24, 0, 0)
+		L(origin, 2)
 	)
 
 	local carryOr = Gates.Or(
 		name .. "_CARRY_OR",
-		P(origin, 48, 0, 4)
+		L(origin, 4)
 	)
 
 	halfAdder2.ConnectA(
