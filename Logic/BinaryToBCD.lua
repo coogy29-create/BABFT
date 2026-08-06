@@ -2,8 +2,6 @@ local Context = getgenv().BABFT_CALCULATOR
 
 local Gates = Context.Modules.Gates
 local Wiring = Context.Modules.Wiring
-local Register16 = Context.Modules.Register16
-local Builder = Context.Modules.Builder
 
 local BinaryToBCD = {}
 
@@ -15,354 +13,234 @@ local function P(origin, x, y, z)
 	)
 end
 
-local function createBCDRegister(name, origin)
-	local bits = {}
-	local q = {}
-	local qb = {}
+local function buildAdd3Digit(name, origin, inputBus)
+	local inverted = {}
+	local detectors = {}
+	local outputBus = {}
 
-	for bit = 0, 19 do
-		local column = bit % 5
-		local row = math.floor(bit / 5)
+	for bit = 0, 3 do
+		inverted[bit] = Gates.Not(
+			name .. "_NOT_" .. bit,
+			P(origin, bit * 6, 0, 0)
+		)
 
-		local register = Context.Modules.Register1.Build(
-			name .. "_BIT_" .. bit,
+		Wiring.Connect(
+			inputBus[bit],
+			inverted[bit]
+		)
+	end
+
+	for value = 0, 9 do
+		local detector = Gates.And(
+			name .. "_VALUE_" .. value,
 			P(
 				origin,
-				column * 54,
+				(value % 5) * 8,
 				0,
-				row * 24
+				10 + math.floor(value / 5) * 8
 			)
 		)
 
-		bits[bit] = register
-		q[bit] = register.Q
-		qb[bit] = register.QB
-	end
+		for bit = 0, 3 do
+			local isOne =
+				math.floor(value / (2 ^ bit)) % 2 == 1
 
-	local function connectData(bus)
-		for bit = 0, 19 do
-			assert(
-				bus[bit],
-				"BCD 입력 비트 누락: " .. bit
-			)
-
-			bits[bit].ConnectData(
-				bus[bit]
+			Wiring.Connect(
+				isOne and inputBus[bit] or inverted[bit],
+				detector
 			)
 		end
+
+		detectors[value] = detector
 	end
 
-	local function connectClock(source)
-		for bit = 0, 19 do
-			bits[bit].ConnectClock(source)
+	for bit = 0, 3 do
+		local output = Gates.Or(
+			name .. "_OUTPUT_" .. bit,
+			P(origin, bit * 8, 0, 30)
+		)
+
+		for value = 0, 9 do
+			local transformed =
+				value >= 5 and value + 3 or value
+
+			local enabled =
+				math.floor(transformed / (2 ^ bit)) % 2 == 1
+
+			if enabled then
+				Wiring.Connect(
+					detectors[value],
+					output
+				)
+			end
 		end
+
+		outputBus[bit] = output
 	end
 
 	return {
-		Bits = bits,
-		Q = q,
-		QB = qb,
-		ConnectData = connectData,
-		ConnectClock = connectClock
+		Input = inputBus,
+		Output = outputBus,
+		Detectors = detectors
 	}
 end
 
-local function buildAdd3Nibble(name, origin)
-	local input = {}
-	local output = {}
+local function buildStage(
+	name,
+	origin,
+	stageInput,
+	injectedBit
+)
+	local corrected = {}
+	local stageOutput = {}
 
-	for bit = 0, 3 do
-		input[bit] = Gates.Or(
-			name .. "_INPUT_" .. bit,
-			P(origin, 0, 0, bit * 6)
-		)
-	end
+	for digit = 0, 4 do
+		local digitInput = {}
 
-	local not0 = Gates.Not(
-		name .. "_NOT_0",
-		P(origin, 12, 0, 0)
-	)
-
-	local not1 = Gates.Not(
-		name .. "_NOT_1",
-		P(origin, 12, 0, 6)
-	)
-
-	local not2 = Gates.Not(
-		name .. "_NOT_2",
-		P(origin, 12, 0, 12)
-	)
-
-	local not3 = Gates.Not(
-		name .. "_NOT_3",
-		P(origin, 12, 0, 18)
-	)
-
-	Wiring.Connect(input[0], not0)
-	Wiring.Connect(input[1], not1)
-	Wiring.Connect(input[2], not2)
-	Wiring.Connect(input[3], not3)
-
-	local ge5a = Gates.And(
-		name .. "_GE5_A",
-		P(origin, 24, 0, 0)
-	)
-
-	local ge5b = Gates.And(
-		name .. "_GE5_B",
-		P(origin, 24, 0, 8)
-	)
-
-	local ge5 = Gates.Or(
-		name .. "_GE5",
-		P(origin, 36, 0, 4)
-	)
-
-	Wiring.Connect(input[3], ge5a)
-	Wiring.Connect(input[2], ge5a)
-
-	Wiring.Connect(input[3], ge5b)
-	Wiring.Connect(input[1], ge5b)
-
-	Wiring.Connect(ge5a, ge5)
-	Wiring.Connect(ge5b, ge5)
-
-	local add0 = Gates.Xor(
-		name .. "_ADD0",
-		P(origin, 48, 0, 0)
-	)
-
-	local carry0 = Gates.And(
-		name .. "_CARRY0",
-		P(origin, 48, 0, 6)
-	)
-
-	Wiring.Connect(input[0], add0)
-	Wiring.Connect(ge5, add0)
-
-	Wiring.Connect(input[0], carry0)
-	Wiring.Connect(ge5, carry0)
-
-	local add1x = Gates.Xor(
-		name .. "_ADD1_X",
-		P(origin, 60, 0, 6)
-	)
-
-	local add1 = Gates.Xor(
-		name .. "_ADD1",
-		P(origin, 72, 0, 6)
-	)
-
-	local carry1a = Gates.And(
-		name .. "_CARRY1_A",
-		P(origin, 60, 0, 12)
-	)
-
-	local carry1b = Gates.And(
-		name .. "_CARRY1_B",
-		P(origin, 72, 0, 12)
-	)
-
-	local carry1 = Gates.Or(
-		name .. "_CARRY1",
-		P(origin, 84, 0, 12)
-	)
-
-	Wiring.Connect(input[1], add1x)
-	Wiring.Connect(ge5, add1x)
-
-	Wiring.Connect(add1x, add1)
-	Wiring.Connect(carry0, add1)
-
-	Wiring.Connect(input[1], carry1a)
-	Wiring.Connect(ge5, carry1a)
-
-	Wiring.Connect(add1x, carry1b)
-	Wiring.Connect(carry0, carry1b)
-
-	Wiring.Connect(carry1a, carry1)
-	Wiring.Connect(carry1b, carry1)
-
-	local add2 = Gates.Xor(
-		name .. "_ADD2",
-		P(origin, 96, 0, 12)
-	)
-
-	local carry2 = Gates.And(
-		name .. "_CARRY2",
-		P(origin, 96, 0, 18)
-	)
-
-	Wiring.Connect(input[2], add2)
-	Wiring.Connect(carry1, add2)
-
-	Wiring.Connect(input[2], carry2)
-	Wiring.Connect(carry1, carry2)
-
-	local add3 = Gates.Xor(
-		name .. "_ADD3",
-		P(origin, 108, 0, 18)
-	)
-
-	Wiring.Connect(input[3], add3)
-	Wiring.Connect(carry2, add3)
-
-	output[0] = add0
-	output[1] = add1
-	output[2] = add2
-	output[3] = add3
-
-	local function connectInput(bus)
 		for bit = 0, 3 do
-			assert(
-				bus[bit],
-				"Add3 입력 비트 누락: " .. bit
-			)
+			digitInput[bit] =
+				stageInput[digit * 4 + bit]
+		end
 
-			Wiring.Connect(
-				bus[bit],
-				input[bit]
-			)
+		local add3 = buildAdd3Digit(
+			name .. "_DIGIT_" .. digit,
+			P(origin, digit * 48, 0, 0),
+			digitInput
+		)
+
+		for bit = 0, 3 do
+			corrected[digit * 4 + bit] =
+				add3.Output[bit]
 		end
 	end
 
+	stageOutput[0] = injectedBit
+
+	for bit = 1, 19 do
+		stageOutput[bit] =
+			corrected[bit - 1]
+	end
+
 	return {
-		Input = input,
-		Output = output,
-		GreaterOrEqual5 = ge5,
-		ConnectInput = connectInput
+		Input = stageInput,
+		Corrected = corrected,
+		Output = stageOutput,
+		InjectedBit = injectedBit
 	}
 end
 
 function BinaryToBCD.Build(name, origin)
-	local binaryRegister = Register16.Build(
-		name .. "_BINARY",
-		P(origin, 0, 0, 0)
+	local self = {}
+
+	self.ZeroInput = Gates.And(
+		name .. "_ZERO_INPUT",
+		P(origin, 0, 0, -30)
 	)
 
-	local bcdRegister = createBCDRegister(
-		name .. "_BCD",
-		P(origin, 260, 0, 0)
+	self.ZeroInverse = Gates.Not(
+		name .. "_ZERO_INVERSE",
+		P(origin, 10, 0, -30)
 	)
 
-	local add3 = {}
+	self.Zero = Gates.And(
+		name .. "_ZERO",
+		P(origin, 20, 0, -30)
+	)
 
-	for digit = 0, 4 do
-		add3[digit] = buildAdd3Nibble(
-			name .. "_ADD3_DIGIT_" .. digit,
-			P(
-				origin,
-				520,
-				0,
-				digit * 34
-			)
-		)
-	end
+	Wiring.Connect(
+		self.ZeroInput,
+		self.ZeroInverse
+	)
 
-	local shiftedBinary = {}
-	local nextBCD = {}
+	Wiring.Connect(
+		self.ZeroInput,
+		self.Zero
+	)
 
-	for bit = 0, 15 do
-		if bit == 0 then
-			shiftedBinary[bit] = Gates.Or(
-				name .. "_ZERO_BINARY",
-				P(origin, 700, 0, bit * 5)
-			)
-		else
-			shiftedBinary[bit] = binaryRegister.Q[bit - 1]
-		end
-	end
+	Wiring.Connect(
+		self.ZeroInverse,
+		self.Zero
+	)
 
-	for digit = 0, 4 do
-		local nibble = {}
+	self.InputGates = {}
+	self.Stages = {}
 
-		for bit = 0, 3 do
-			nibble[bit] = bcdRegister.Q[
-				digit * 4 + bit
-			]
-		end
-
-		add3[digit].ConnectInput(nibble)
-	end
+	local currentBus = {}
 
 	for bit = 0, 19 do
-		local digit = math.floor(bit / 4)
-		local nibbleBit = bit % 4
+		currentBus[bit] = self.Zero
+	end
 
-		if bit == 0 then
-			nextBCD[bit] = binaryRegister.Q[15]
-		else
-			local previousDigit = math.floor(
-				(bit - 1) / 4
+	for stage = 0, 15 do
+		local inputGate = Gates.Or(
+			name .. "_INPUT_BIT_" .. stage,
+			P(
+				origin,
+				stage * 8,
+				0,
+				-18
 			)
-
-			local previousBit = (bit - 1) % 4
-
-			nextBCD[bit] =
-				add3[previousDigit].Output[previousBit]
-		end
-	end
-
-	local stepDelay = Builder.PlaceNamedBlock(
-		name .. "_STEP_DELAY",
-		"Delay",
-		P(origin, 760, 0, 0)
-	)
-
-	binaryRegister.ConnectData(
-		shiftedBinary
-	)
-
-	bcdRegister.ConnectData(
-		nextBCD
-	)
-
-	binaryRegister.ConnectClock(
-		stepDelay
-	)
-
-	bcdRegister.ConnectClock(
-		stepDelay
-	)
-
-	local function connectBinaryBus(bus)
-		binaryRegister.ConnectData(bus)
-	end
-
-	local function connectLoad(source)
-		binaryRegister.ConnectClock(source)
-	end
-
-	local function connectStep(source)
-		Wiring.Connect(
-			source,
-			stepDelay
 		)
+
+		self.InputGates[stage] = inputGate
+
+		local stageResult = buildStage(
+			name .. "_STAGE_" .. stage,
+			P(
+				origin,
+				0,
+				0,
+				stage * 44
+			),
+			currentBus,
+			inputGate
+		)
+
+		self.Stages[stage] = stageResult
+		currentBus = stageResult.Output
 	end
 
-	local digits = {}
+	self.Output = currentBus
+	self.Digits = {}
 
 	for digit = 0, 4 do
-		digits[digit] = {}
+		self.Digits[digit] = {}
 
 		for bit = 0, 3 do
-			digits[digit][bit] =
-				bcdRegister.Q[
-					digit * 4 + bit
-				]
+			self.Digits[digit][bit] =
+				self.Output[digit * 4 + bit]
 		end
 	end
 
-	return {
-		BinaryRegister = binaryRegister,
-		BCDRegister = bcdRegister,
-		Add3 = add3,
-		StepDelay = stepDelay,
-		Digits = digits,
-		ConnectBinaryBus = connectBinaryBus,
-		ConnectLoad = connectLoad,
-		ConnectStep = connectStep
-	}
+	function self.ConnectBinaryBus(binaryBus)
+		assert(
+			type(binaryBus) == "table",
+			"16비트 이진 입력 버스가 필요합니다."
+		)
+
+		for bit = 0, 15 do
+			assert(
+				binaryBus[bit],
+				"이진 입력 비트 누락: " .. bit
+			)
+		end
+
+		Wiring.Connect(
+			binaryBus[0],
+			self.ZeroInput
+		)
+
+		for stage = 0, 15 do
+			local sourceBit = 15 - stage
+
+			Wiring.Connect(
+				binaryBus[sourceBit],
+				self.InputGates[stage]
+			)
+		end
+	end
+
+	return self
 end
 
 Context.Modules.BinaryToBCD = BinaryToBCD
