@@ -15,42 +15,49 @@ local function P(origin, x, y, z)
 end
 
 function Subtractor16.Build(name, origin)
-	local adder = Adder16.Build(
+	local self = {}
+
+	self.Adder = Adder16.Build(
 		name .. "_ADDER",
-		P(origin, 0, 0, 24)
+		P(origin, 0, 0, 28)
 	)
 
-	local invertedBBus = {}
+	self.BXor = {}
+	self.Sum = self.Adder.Sum
+	self.Carry = self.Adder.Carry
+	self.CarryOut = self.Adder.CarryOut
 
 	for bit = 0, 15 do
 		local column = bit % 4
 		local row = math.floor(bit / 4)
 
-		invertedBBus[bit] = Gates.Xor(
+		local xorGate = Gates.Xor(
 			name .. "_B_XOR_" .. bit,
 			P(
 				origin,
 				column * 60,
 				0,
-				row * 34
+				row * 36
 			)
 		)
 
-		adder.Adders[bit].ConnectB(
-			invertedBBus[bit]
+		self.BXor[bit] = xorGate
+
+		self.Adder.Adders[bit].ConnectB(
+			xorGate
 		)
 	end
 
-	local function connectABus(bus)
+	function self.ConnectABus(bus)
 		assert(
 			type(bus) == "table",
 			"A 입력 버스가 필요합니다."
 		)
 
-		adder.ConnectABus(bus)
+		self.Adder.ConnectABus(bus)
 	end
 
-	local function connectBBus(bus)
+	function self.ConnectBBus(bus)
 		assert(
 			type(bus) == "table",
 			"B 입력 버스가 필요합니다."
@@ -64,12 +71,12 @@ function Subtractor16.Build(name, origin)
 
 			Wiring.Connect(
 				bus[bit],
-				invertedBBus[bit]
+				self.BXor[bit]
 			)
 		end
 	end
 
-	local function connectSubtract(source)
+	function self.ConnectSubtract(source)
 		assert(
 			source,
 			"감산 선택 신호가 필요합니다."
@@ -78,23 +85,14 @@ function Subtractor16.Build(name, origin)
 		for bit = 0, 15 do
 			Wiring.Connect(
 				source,
-				invertedBBus[bit]
+				self.BXor[bit]
 			)
 		end
 
-		adder.ConnectCarryIn(source)
+		self.Adder.ConnectCarryIn(source)
 	end
 
-	return {
-		Adder = adder,
-		InvertedB = invertedBBus,
-		Sum = adder.Sum,
-		Carry = adder.Carry,
-		CarryOut = adder.CarryOut,
-		ConnectABus = connectABus,
-		ConnectBBus = connectBBus,
-		ConnectSubtract = connectSubtract
-	}
+	return self
 end
 
 Context.Modules.Subtractor16 = Subtractor16
