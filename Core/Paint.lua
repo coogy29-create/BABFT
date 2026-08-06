@@ -13,46 +13,47 @@ local function getPaintRemote()
 		10
 	)
 
-	assert(tool,"PaintTool을 찾을 수 없습니다.")
+	assert(tool, "PaintTool을 찾을 수 없습니다.")
 
 	local remote =
 		tool:FindFirstChild("RF")
 		or tool:FindFirstChild("PaintRF")
 
-	assert(remote,"Paint Remote를 찾을 수 없습니다.")
+	assert(remote, "Paint Remote를 찾을 수 없습니다.")
 
 	return remote
-
 end
 
 local function resolve(object)
 
-	if typeof(object)=="Instance" then
+	if typeof(object) == "Instance" then
 		return object
 	end
 
-	local result=Context:GetObject(object)
+	local result = Context:GetObject(object)
 
-	assert(result,"등록되지 않은 객체 : "..tostring(object))
+	assert(
+		result,
+		"등록되지 않은 객체 : " .. tostring(object)
+	)
 
 	return result
-
 end
 
-function Paint.Paint(object,color)
+function Paint.Paint(object, color)
 
-	object=resolve(object)
+	object = resolve(object)
 
-	local remote=getPaintRemote()
+	local remote = getPaintRemote()
 
-	local success,result=pcall(function()
+	local success, result = pcall(function()
 
-		return remote:InvokeServer(
-			color,
+		return remote:InvokeServer({
 			{
-				object
+				object,
+				color
 			}
-		)
+		})
 
 	end)
 
@@ -60,58 +61,86 @@ function Paint.Paint(object,color)
 		error(result)
 	end
 
-	Context.Statistics.PaintOperations+=1
+	Context.Statistics.PaintOperations += 1
 
 	task.wait(Config.PaintDelay)
 
 end
 
-function Paint.PaintMany(objects,color)
+function Paint.PaintMany(objects, color)
 
-	for _,object in ipairs(objects) do
+	local batch = {}
 
-		Paint.Paint(
-			object,
+	for _, object in ipairs(objects) do
+		table.insert(batch, {
+			resolve(object),
 			color
-		)
-
+		})
 	end
+
+	local remote = getPaintRemote()
+
+	local success, result = pcall(function()
+		return remote:InvokeServer(batch)
+	end)
+
+	if not success then
+		error(result)
+	end
+
+	Context.Statistics.PaintOperations += #batch
+
+	task.wait(Config.PaintDelay)
 
 end
 
 function Paint.PaintWhite(object)
-
 	Paint.Paint(
 		object,
 		Color3.new(1,1,1)
 	)
-
 end
 
 function Paint.PaintBlack(object)
-
 	Paint.Paint(
 		object,
 		Color3.new(0,0,0)
 	)
-
 end
 
 function Paint.ProcessQueue()
 
-	for _,data in ipairs(Context.PaintQueue) do
-
-		Paint.Paint(
-			data.Object,
-			data.Color
-		)
-
+	if #Context.PaintQueue == 0 then
+		return
 	end
+
+	local batch = {}
+
+	for _, data in ipairs(Context.PaintQueue) do
+		table.insert(batch, {
+			resolve(data.Object),
+			data.Color
+		})
+	end
+
+	local remote = getPaintRemote()
+
+	local success, result = pcall(function()
+		return remote:InvokeServer(batch)
+	end)
+
+	if not success then
+		error(result)
+	end
+
+	Context.Statistics.PaintOperations += #batch
 
 	table.clear(Context.PaintQueue)
 
+	task.wait(Config.PaintDelay)
+
 end
 
-Context.Modules.Paint=Paint
+Context.Modules.Paint = Paint
 
 return Paint
