@@ -1,16 +1,9 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Config = Context.Config
 local FullAdder = Context.Modules.FullAdder
 
 local Adder16 = {}
-
-local function P(origin, x, y, z)
-	return origin * CFrame.new(
-		x or 0,
-		y or 0,
-		z or 0
-	)
-end
 
 function Adder16.Build(name, origin)
 	local self = {}
@@ -19,18 +12,41 @@ function Adder16.Build(name, origin)
 	self.Sum = {}
 	self.Carry = {}
 
+	local layersPerAdder = 5
+
+	local addersPerColumn = math.max(
+		1,
+		math.floor(
+			Config.Layout.LayerCount
+				/ layersPerAdder
+		)
+	)
+
 	for bit = 0, 15 do
-		local column = bit % 4
-		local row = math.floor(bit / 4)
+		local column =
+			math.floor(
+				bit / addersPerColumn
+			)
+
+		local adderInColumn =
+			bit % addersPerColumn
+
+		local startLayer =
+			adderInColumn * layersPerAdder
+
+		local adderOrigin =
+			origin
+			* CFrame.new(
+				column
+					* Config.Layout.GateSpacing,
+				startLayer
+					* Config.Layout.LayerHeight,
+				0
+			)
 
 		local adder = FullAdder.Build(
 			name .. "_BIT_" .. bit,
-			P(
-				origin,
-				column * 60,
-				0,
-				row * 36
-			)
+			adderOrigin
 		)
 
 		self.Adders[bit] = adder
@@ -53,7 +69,8 @@ function Adder16.Build(name, origin)
 		for bit = 0, 15 do
 			assert(
 				bus[bit],
-				"A 입력 비트 누락: " .. bit
+				"A 입력 비트 누락: "
+					.. tostring(bit)
 			)
 
 			self.Adders[bit].ConnectA(
@@ -71,7 +88,8 @@ function Adder16.Build(name, origin)
 		for bit = 0, 15 do
 			assert(
 				bus[bit],
-				"B 입력 비트 누락: " .. bit
+				"B 입력 비트 누락: "
+					.. tostring(bit)
 			)
 
 			self.Adders[bit].ConnectB(
@@ -86,7 +104,9 @@ function Adder16.Build(name, origin)
 			"Carry 입력이 필요합니다."
 		)
 
-		self.Adders[0].ConnectCarryIn(source)
+		self.Adders[0].ConnectCarryIn(
+			source
+		)
 	end
 
 	self.CarryOut = self.Carry[15]
