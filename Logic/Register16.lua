@@ -1,16 +1,9 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Config = Context.Config
 local Register1 = Context.Modules.Register1
 
 local Register16 = {}
-
-local function P(origin, x, y, z)
-	return origin * CFrame.new(
-		x or 0,
-		y or 0,
-		z or 0
-	)
-end
 
 function Register16.Build(name, origin)
 	local self = {}
@@ -19,18 +12,41 @@ function Register16.Build(name, origin)
 	self.Q = {}
 	self.QB = {}
 
+	local layersPerCell = 7
+
+	local cellsPerColumn = math.max(
+		1,
+		math.floor(
+			Config.Layout.LayerCount
+				/ layersPerCell
+		)
+	)
+
 	for bit = 0, 15 do
-		local column = bit % 4
-		local row = math.floor(bit / 4)
+		local column =
+			math.floor(
+				bit / cellsPerColumn
+			)
+
+		local cellInColumn =
+			bit % cellsPerColumn
+
+		local startLayer =
+			cellInColumn * layersPerCell
+
+		local cellOrigin =
+			origin
+			* CFrame.new(
+				column
+					* Config.Layout.GateSpacing,
+				startLayer
+					* Config.Layout.LayerHeight,
+				0
+			)
 
 		local cell = Register1.Build(
 			name .. "_BIT_" .. bit,
-			P(
-				origin,
-				column * 56,
-				0,
-				row * 28
-			)
+			cellOrigin
 		)
 
 		self.Cells[bit] = cell
@@ -47,7 +63,8 @@ function Register16.Build(name, origin)
 		for bit = 0, 15 do
 			assert(
 				inputBus[bit],
-				"데이터 비트 누락: " .. bit
+				"데이터 비트 누락: "
+					.. tostring(bit)
 			)
 
 			self.Cells[bit].ConnectData(
@@ -63,7 +80,9 @@ function Register16.Build(name, origin)
 		)
 
 		for bit = 0, 15 do
-			self.Cells[bit].ConnectClock(source)
+			self.Cells[bit].ConnectClock(
+				source
+			)
 		end
 	end
 
