@@ -1,50 +1,55 @@
-local Environment = getgenv()
+local Context = {}
 
-Environment.BABFT_CALCULATOR = Environment.BABFT_CALCULATOR or {}
+Context.Config = {}
 
-local Context = Environment.BABFT_CALCULATOR
+Context.Modules = {}
 
-Context.Version = Context.Version or "0.1.0"
+Context.NamedObjects = {}
 
-Context.Modules = Context.Modules or {}
+Context.BuildQueue = {}
+Context.ConnectionQueue = {}
+Context.PropertyQueue = {}
+Context.PaintQueue = {}
 
-Context.Config = Context.Config or {}
+Context.State = {
+	Running = false,
+	Compiling = false,
+	CancelRequested = false,
+	CurrentTask = "",
+	Progress = 0,
+	LastError = nil
+}
 
-Context.State = Context.State or {}
-
-Context.Objects = Context.Objects or {}
-
-Context.BuildQueue = Context.BuildQueue or {}
-
-Context.ConnectionQueue = Context.ConnectionQueue or {}
-
-Context.PropertyQueue = Context.PropertyQueue or {}
-
-Context.PaintQueue = Context.PaintQueue or {}
-
-Context.NamedObjects = Context.NamedObjects or {}
-
-Context.LoadedFiles = Context.LoadedFiles or {}
-
-Context.Statistics = Context.Statistics or {
+Context.Statistics = {
 	BlocksPlaced = 0,
 	ConnectionsMade = 0,
 	PropertiesChanged = 0,
 	PaintOperations = 0
 }
 
-Context.State.Running = false
-Context.State.CancelRequested = false
-Context.State.Progress = 0
-Context.State.CurrentTask = "Idle"
-
 function Context:RegisterObject(name, object)
+	assert(type(name) == "string", "이름은 문자열이어야 합니다.")
+	assert(object, "객체가 없습니다.")
+
 	self.NamedObjects[name] = object
+
 	return object
 end
 
 function Context:GetObject(name)
 	return self.NamedObjects[name]
+end
+
+function Context:RemoveObject(name)
+	local object = self.NamedObjects[name]
+
+	self.NamedObjects[name] = nil
+
+	return object
+end
+
+function Context:ClearObjects()
+	table.clear(self.NamedObjects)
 end
 
 function Context:QueueBuild(data)
@@ -63,7 +68,7 @@ function Context:QueuePaint(data)
 	table.insert(self.PaintQueue, data)
 end
 
-function Context:ClearQueues()
+function Context:ResetQueues()
 	table.clear(self.BuildQueue)
 	table.clear(self.ConnectionQueue)
 	table.clear(self.PropertyQueue)
@@ -77,6 +82,6 @@ function Context:ResetStatistics()
 	self.Statistics.PaintOperations = 0
 end
 
-Context.Modules.Context = Context
+getgenv().BABFT_CALCULATOR = Context
 
 return Context
