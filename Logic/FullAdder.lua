@@ -44,25 +44,26 @@ function FullAdder.Build(name, origin)
 		carryOr
 	)
 
-	local function connectA(source)
+	local self = {}
+
+	function self.ConnectA(source)
 		halfAdder1.ConnectA(source)
 	end
 
-	local function connectB(source)
+	function self.ConnectB(source)
 		halfAdder1.ConnectB(source)
 	end
 
-	local function connectCarryIn(source)
+	function self.ConnectCarryIn(source)
 		halfAdder2.ConnectB(source)
 	end
 
-	return {
-		Sum = halfAdder2.Sum,
-		Carry = carryOr,
-		ConnectA = connectA,
-		ConnectB = connectB,
-		ConnectCarryIn = connectCarryIn
-	}
+	self.Sum = halfAdder2.Sum
+	self.Carry = carryOr
+	self.HalfAdder1 = halfAdder1
+	self.HalfAdder2 = halfAdder2
+
+	return self
 end
 
 Context.Modules.FullAdder = FullAdder
