@@ -4,7 +4,6 @@ local Workspace = game:GetService("Workspace")
 local Context = getgenv().BABFT_CALCULATOR
 local Config = Context.Config
 local Utils = Context.Modules.Utils
-local Scanner = Context.Modules.Scanner
 local Inventory = Context.Modules.Inventory
 local WhiteZone = Context.Modules.WhiteZone
 
@@ -12,12 +11,70 @@ local Builder = {}
 
 local LocalPlayer = Players.LocalPlayer
 
+
+local ToolHoldRunning = false
+
+local function equipAllTools()
+	local character =
+		LocalPlayer.Character
+		or LocalPlayer.CharacterAdded:Wait()
+
+	local backpack =
+		LocalPlayer:WaitForChild("Backpack")
+
+	for _, tool in ipairs(backpack:GetChildren()) do
+		if tool:IsA("Tool") then
+			pcall(function()
+				tool.Parent = character
+			end)
+		end
+	end
+end
+
+local function startToolHold()
+	if ToolHoldRunning then
+		return
+	end
+
+	ToolHoldRunning = true
+
+	task.spawn(function()
+		while ToolHoldRunning do
+			if Utils.IsCancelled() then
+				break
+			end
+
+			if Context.Ready then
+				break
+			end
+
+			equipAllTools()
+			task.wait(0.1)
+		end
+
+		ToolHoldRunning = false
+	end)
+end
+
+function Builder.StopToolHold()
+	ToolHoldRunning = false
+end
+
 local function getBuildingRemote()
 	local tool = Utils.WaitForTool(
 		Config.Tools.BuildingTool,
 		true,
 		10
 	)
+
+	if not tool then
+		local backpack = LocalPlayer:FindFirstChild("Backpack")
+
+		tool = backpack
+			and backpack:FindFirstChild(
+				Config.Tools.BuildingTool
+			)
+	end
 
 	assert(tool, "BuildingTool을 찾을 수 없습니다.")
 
@@ -28,8 +85,91 @@ local function getBuildingRemote()
 	return remote
 end
 
-local function resolveBlockName(blockType)
-	return Config.BlockNames[blockType] or blockType
+local function getObjectPosition(object)
+	if not object then
+		return nil
+	end
+
+	if object:IsA("BasePart") then
+		return object.Position
+	end
+
+	if object:IsA("Model") then
+		return object:GetPivot().Position
+	end
+
+	local part = object:FindFirstChildWhichIsA(
+		"BasePart",
+		true
+	)
+
+	return part and part.Position or nil
+end
+
+local function isExpectedObject(object, blockName)
+	return object
+		and object.Parent
+		and object.Name == blockName
+end
+
+local function findNearestNewObject(
+	folder,
+	snapshot,
+	blockName,
+	targetPosition
+)
+	local nearest = nil
+	local nearestDistance = math.huge
+
+	for _, object in ipairs(folder:GetChildren()) do
+		if not snapshot[object]
+			and object.Name == blockName then
+
+			local position = getObjectPosition(object)
+
+			if position then
+				local distance =
+					(position - targetPosition).Magnitude
+
+				if distance < nearestDistance then
+					nearest = object
+					nearestDistance = distance
+				end
+			elseif not nearest then
+				nearest = object
+			end
+		end
+	end
+
+	return nearest
+end
+
+local function findNearestExistingObject(
+	folder,
+	blockName,
+	targetPosition,
+	maxDistance
+)
+	local nearest = nil
+	local nearestDistance = maxDistance or 8
+
+	for _, object in ipairs(folder:GetChildren()) do
+		if object.Name == blockName then
+			local position = getObjectPosition(object)
+
+			if position then
+				local distance =
+					(position - targetPosition).Magnitude
+
+				if distance < nearestDistance then
+					nearest = object
+					nearestDistance = distance
+				end
+			end
+		end
+	end
+
+	return nearest
 end
 
 local function resolveInventoryValue(blockType)
@@ -41,37 +181,51 @@ local function resolveInventoryValue(blockType)
 
 	assert(
 		type(value) == "number" and value > 0,
-		"보유량 값이 잘못되었습니다: " .. tostring(blockType)
+		"보유량 값 오류: " .. tostring(blockType)
 	)
 
 	return value
 end
 
-local function validateCFrame(worldCFrame)
+function Builder.PlaceBlock(blockType, worldCFrame)
+	startToolHold()
+	equipAllTools()
+
 	assert(
 		typeof(worldCFrame) == "CFrame",
 		"worldCFrame은 CFrame이어야 합니다."
 	)
-end
-
-function Builder.PlaceBlock(blockType, worldCFrame)
-	validateCFrame(worldCFrame)
 
 	if Utils.IsCancelled() then
 		return nil, "사용자가 중단했습니다."
 	end
 
 	local folder = Utils.GetBlocksFolder()
-	local snapshot = Scanner
-		and Scanner.TakeSnapshot()
-		or Utils.SnapshotChildren(folder)
+	local blockName =
+		Config.BlockNames[blockType] or blockType
+
+	local snapshot = {}
+
+	for _, object in ipairs(folder:GetChildren()) do
+		snapshot[object] = true
+	end
+
+	local detectedObject = nil
+
+	local childConnection =
+		folder.ChildAdded:Connect(function(object)
+			if object.Name == blockName then
+				detectedObject = object
+			end
+		end)
 
 	local remote = getBuildingRemote()
-	local blockName = resolveBlockName(blockType)
-	local inventoryValue = resolveInventoryValue(blockType)
-	local zone = WhiteZone and WhiteZone.Get() or Utils.GetWhiteZone()
+	local inventoryValue =
+		resolveInventoryValue(blockType)
 
-	assert(zone, "workspace.WhiteZone을 찾을 수 없습니다.")
+	local zone = WhiteZone
+		and WhiteZone.Get()
+		or Utils.GetWhiteZone()
 
 	local zoneCFrame = WhiteZone
 		and WhiteZone.WorldToZone(worldCFrame)
@@ -90,6 +244,8 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 	end)
 
 	if not success then
+		childConnection:Disconnect()
+
 		return nil,
 			"블록 설치 리모트 실패: "
 			.. blockName
@@ -97,19 +253,51 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 			.. tostring(result)
 	end
 
-	local created
+	local created = nil
 
-	if Scanner then
-		created = Scanner.WaitForCreated(
-			snapshot,
-			Config.InstallTimeout
-		)
-	else
-		created = Utils.WaitForNewObject(
+	if typeof(result) == "Instance"
+		and isExpectedObject(result, blockName) then
+
+		created = result
+	end
+
+	local deadline =
+		os.clock()
+		+ (Config.InstallTimeout or 7)
+
+	repeat
+		if detectedObject
+			and isExpectedObject(
+				detectedObject,
+				blockName
+			) then
+
+			created = detectedObject
+			break
+		end
+
+		created = findNearestNewObject(
 			folder,
 			snapshot,
 			blockName,
-			Config.InstallTimeout
+			worldCFrame.Position
+		)
+
+		if created then
+			break
+		end
+
+		task.wait(0.03)
+	until os.clock() >= deadline
+
+	childConnection:Disconnect()
+
+	if not created then
+		created = findNearestExistingObject(
+			folder,
+			blockName,
+			worldCFrame.Position,
+			12
 		)
 	end
 
@@ -117,26 +305,6 @@ function Builder.PlaceBlock(blockType, worldCFrame)
 		return nil,
 			"생성된 블록을 찾지 못했습니다: "
 			.. blockName
-	end
-
-	if created.Name ~= blockName then
-		local deadline = os.clock() + 1
-
-		repeat
-			for _, object in ipairs(folder:GetChildren()) do
-				if not snapshot[object]
-					and object.Name == blockName then
-					created = object
-					break
-				end
-			end
-
-			if created.Name == blockName then
-				break
-			end
-
-			task.wait(0.02)
-		until os.clock() >= deadline
 	end
 
 	Context.Statistics.BlocksPlaced += 1
@@ -154,10 +322,11 @@ function Builder.PlaceNamedBlock(
 		"등록 이름이 필요합니다."
 	)
 
-	local object, errorMessage = Builder.PlaceBlock(
-		blockType,
-		worldCFrame
-	)
+	local object, errorMessage =
+		Builder.PlaceBlock(
+			blockType,
+			worldCFrame
+		)
 
 	if not object then
 		error(errorMessage)
@@ -169,23 +338,14 @@ function Builder.PlaceNamedBlock(
 end
 
 function Builder.PlaceMany(list)
-	assert(
-		type(list) == "table",
-		"설치 목록은 테이블이어야 합니다."
-	)
-
 	local created = {}
-	local total = #list
 
 	for index, data in ipairs(list) do
 		if Utils.IsCancelled() then
 			break
 		end
 
-		assert(data.Name, "설치 항목 Name 누락")
-		assert(data.Type, "설치 항목 Type 누락")
-
-		local worldCFrame =
+		local cframe =
 			data.CFrame
 			or (
 				typeof(data.Position) == "Vector3"
@@ -193,21 +353,21 @@ function Builder.PlaceMany(list)
 			)
 
 		assert(
-			typeof(worldCFrame) == "CFrame",
-			"설치 항목 CFrame 누락: "
-			.. tostring(data.Name)
+			typeof(cframe) == "CFrame",
+			"CFrame 누락: " .. tostring(data.Name)
 		)
 
 		Utils.SetTask(
-			"블록 설치: " .. data.Name,
-			total > 0 and index / total or 1
+			"블록 설치: " .. tostring(data.Name),
+			index / #list
 		)
 
-		local object = Builder.PlaceNamedBlock(
-			data.Name,
-			data.Type,
-			worldCFrame
-		)
+		local object =
+			Builder.PlaceNamedBlock(
+				data.Name,
+				data.Type,
+				cframe
+			)
 
 		created[#created + 1] = object
 
@@ -236,34 +396,26 @@ function Builder.Find(name)
 end
 
 function Builder.Exists(name)
-	local object = Builder.Find(name)
+	local object = Context:GetObject(name)
 
-	return object ~= nil and object.Parent ~= nil
+	return object ~= nil
+		and object.Parent ~= nil
 end
 
 function Builder.Require(name)
-	local object = Builder.Find(name)
+	local object = Context:GetObject(name)
 
 	assert(
 		object and object.Parent,
-		"등록된 블록을 찾을 수 없습니다: "
-		.. tostring(name)
+		"등록된 블록 없음: " .. tostring(name)
 	)
 
 	return object
 end
 
-function Builder.Unregister(name)
-	local object = Context.NamedObjects[name]
-	Context.NamedObjects[name] = nil
-
-	return object
-end
-
 function Builder.ClearRegistry()
-	for key in pairs(Context.NamedObjects) do
-		Context.NamedObjects[key] = nil
-	end
+	Builder.StopToolHold()
+	table.clear(Context.NamedObjects)
 end
 
 Context.Modules.Builder = Builder
