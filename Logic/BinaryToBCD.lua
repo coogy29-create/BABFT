@@ -1,19 +1,32 @@
 local Context = getgenv().BABFT_CALCULATOR
 
+local Config = Context.Config
 local Gates = Context.Modules.Gates
 local Wiring = Context.Modules.Wiring
 
 local BinaryToBCD = {}
 
-local function P(origin, x, y, z)
-	return origin * CFrame.new(
-		x or 0,
-		y or 0,
-		z or 0
+local GATES_PER_DIGIT = 18
+local DIGITS_PER_STAGE = 5
+local GATES_PER_STAGE =
+	GATES_PER_DIGIT * DIGITS_PER_STAGE
+
+local STAGE_BASE_INDEX = 32
+
+local function L(origin, index, depth)
+	return Config.Layout.GetLayeredCFrame(
+		origin,
+		index,
+		depth or 0
 	)
 end
 
-local function buildAdd3Digit(name, origin, inputBus)
+local function buildAdd3Digit(
+	name,
+	origin,
+	inputBus,
+	baseIndex
+)
 	local inverted = {}
 	local detectors = {}
 	local outputBus = {}
@@ -21,7 +34,10 @@ local function buildAdd3Digit(name, origin, inputBus)
 	for bit = 0, 3 do
 		inverted[bit] = Gates.Not(
 			name .. "_NOT_" .. bit,
-			P(origin, bit * 6, 0, 0)
+			L(
+				origin,
+				baseIndex + bit
+			)
 		)
 
 		Wiring.Connect(
@@ -31,22 +47,27 @@ local function buildAdd3Digit(name, origin, inputBus)
 	end
 
 	for value = 0, 9 do
+		local detectorIndex =
+			baseIndex + 4 + value
+
 		local detector = Gates.And(
 			name .. "_VALUE_" .. value,
-			P(
+			L(
 				origin,
-				(value % 5) * 8,
-				0,
-				10 + math.floor(value / 5) * 8
+				detectorIndex
 			)
 		)
 
 		for bit = 0, 3 do
 			local isOne =
-				math.floor(value / (2 ^ bit)) % 2 == 1
+				math.floor(
+					value / (2 ^ bit)
+				) % 2 == 1
 
 			Wiring.Connect(
-				isOne and inputBus[bit] or inverted[bit],
+				isOne
+					and inputBus[bit]
+					or inverted[bit],
 				detector
 			)
 		end
@@ -55,17 +76,27 @@ local function buildAdd3Digit(name, origin, inputBus)
 	end
 
 	for bit = 0, 3 do
+		local outputIndex =
+			baseIndex + 14 + bit
+
 		local output = Gates.Or(
 			name .. "_OUTPUT_" .. bit,
-			P(origin, bit * 8, 0, 30)
+			L(
+				origin,
+				outputIndex
+			)
 		)
 
 		for value = 0, 9 do
 			local transformed =
-				value >= 5 and value + 3 or value
+				value >= 5
+					and value + 3
+					or value
 
 			local enabled =
-				math.floor(transformed / (2 ^ bit)) % 2 == 1
+				math.floor(
+					transformed / (2 ^ bit)
+				) % 2 == 1
 
 			if enabled then
 				Wiring.Connect(
@@ -81,6 +112,7 @@ local function buildAdd3Digit(name, origin, inputBus)
 	return {
 		Input = inputBus,
 		Output = outputBus,
+		Inverted = inverted,
 		Detectors = detectors
 	}
 end
@@ -89,28 +121,44 @@ local function buildStage(
 	name,
 	origin,
 	stageInput,
-	injectedBit
+	injectedBit,
+	stageIndex
 )
 	local corrected = {}
 	local stageOutput = {}
+	local digits = {}
+
+	local stageBase =
+		STAGE_BASE_INDEX
+		+ stageIndex * GATES_PER_STAGE
 
 	for digit = 0, 4 do
 		local digitInput = {}
 
 		for bit = 0, 3 do
 			digitInput[bit] =
-				stageInput[digit * 4 + bit]
+				stageInput[
+					digit * 4 + bit
+				]
 		end
+
+		local digitBase =
+			stageBase
+			+ digit * GATES_PER_DIGIT
 
 		local add3 = buildAdd3Digit(
 			name .. "_DIGIT_" .. digit,
-			P(origin, digit * 48, 0, 0),
-			digitInput
+			origin,
+			digitInput,
+			digitBase
 		)
 
+		digits[digit] = add3
+
 		for bit = 0, 3 do
-			corrected[digit * 4 + bit] =
-				add3.Output[bit]
+			corrected[
+				digit * 4 + bit
+			] = add3.Output[bit]
 		end
 	end
 
@@ -125,7 +173,8 @@ local function buildStage(
 		Input = stageInput,
 		Corrected = corrected,
 		Output = stageOutput,
-		InjectedBit = injectedBit
+		InjectedBit = injectedBit,
+		Digits = digits
 	}
 end
 
@@ -134,17 +183,17 @@ function BinaryToBCD.Build(name, origin)
 
 	self.ZeroInput = Gates.And(
 		name .. "_ZERO_INPUT",
-		P(origin, 0, 0, -30)
+		L(origin, 0)
 	)
 
 	self.ZeroInverse = Gates.Not(
 		name .. "_ZERO_INVERSE",
-		P(origin, 10, 0, -30)
+		L(origin, 1)
 	)
 
 	self.Zero = Gates.And(
 		name .. "_ZERO",
-		P(origin, 20, 0, -30)
+		L(origin, 2)
 	)
 
 	Wiring.Connect(
@@ -174,30 +223,28 @@ function BinaryToBCD.Build(name, origin)
 	for stage = 0, 15 do
 		local inputGate = Gates.Or(
 			name .. "_INPUT_BIT_" .. stage,
-			P(
+			L(
 				origin,
-				stage * 8,
-				0,
-				-18
+				3 + stage
 			)
 		)
 
-		self.InputGates[stage] = inputGate
+		self.InputGates[stage] =
+			inputGate
 
 		local stageResult = buildStage(
 			name .. "_STAGE_" .. stage,
-			P(
-				origin,
-				0,
-				0,
-				stage * 44
-			),
+			origin,
 			currentBus,
-			inputGate
+			inputGate,
+			stage
 		)
 
-		self.Stages[stage] = stageResult
-		currentBus = stageResult.Output
+		self.Stages[stage] =
+			stageResult
+
+		currentBus =
+			stageResult.Output
 	end
 
 	self.Output = currentBus
@@ -208,11 +255,15 @@ function BinaryToBCD.Build(name, origin)
 
 		for bit = 0, 3 do
 			self.Digits[digit][bit] =
-				self.Output[digit * 4 + bit]
+				self.Output[
+					digit * 4 + bit
+				]
 		end
 	end
 
-	function self.ConnectBinaryBus(binaryBus)
+	function self.ConnectBinaryBus(
+		binaryBus
+	)
 		assert(
 			type(binaryBus) == "table",
 			"16비트 이진 입력 버스가 필요합니다."
@@ -221,7 +272,8 @@ function BinaryToBCD.Build(name, origin)
 		for bit = 0, 15 do
 			assert(
 				binaryBus[bit],
-				"이진 입력 비트 누락: " .. bit
+				"이진 입력 비트 누락: "
+					.. tostring(bit)
 			)
 		end
 
@@ -231,7 +283,8 @@ function BinaryToBCD.Build(name, origin)
 		)
 
 		for stage = 0, 15 do
-			local sourceBit = 15 - stage
+			local sourceBit =
+				15 - stage
 
 			Wiring.Connect(
 				binaryBus[sourceBit],
@@ -243,6 +296,7 @@ function BinaryToBCD.Build(name, origin)
 	return self
 end
 
-Context.Modules.BinaryToBCD = BinaryToBCD
+Context.Modules.BinaryToBCD =
+	BinaryToBCD
 
 return BinaryToBCD
