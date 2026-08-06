@@ -1,85 +1,70 @@
-local Context=getgenv().BABFT_CALCULATOR
+local Context = getgenv().BABFT_CALCULATOR
 
-local HalfAdder=Context.Modules.HalfAdder
-local Gates=Context.Modules.Gates
-local Wiring=Context.Modules.Wiring
+local HalfAdder = Context.Modules.HalfAdder
+local Gates = Context.Modules.Gates
+local Wiring = Context.Modules.Wiring
 
-local FullAdder={}
+local FullAdder = {}
 
-local function P(origin,x,y,z)
-	return origin*CFrame.new(
+local function P(origin, x, y, z)
+	return origin * CFrame.new(
 		x or 0,
 		y or 0,
 		z or 0
 	)
 end
 
-function FullAdder.Build(name,origin)
-
-	local ha1=HalfAdder.Build(
-		name.."_HA1",
-		P(origin,0,0,0)
+function FullAdder.Build(name, origin)
+	local halfAdder1 = HalfAdder.Build(
+		name .. "_HA1",
+		P(origin, 0, 0, 0)
 	)
 
-	local ha2=HalfAdder.Build(
-		name.."_HA2",
-		P(origin,24,0,0)
+	local halfAdder2 = HalfAdder.Build(
+		name .. "_HA2",
+		P(origin, 24, 0, 0)
 	)
 
-	local carryOr=Gates.Or(
-		name.."_CARRY_OR",
-		P(origin,48,0,4)
+	local carryOr = Gates.Or(
+		name .. "_CARRY_OR",
+		P(origin, 48, 0, 4)
 	)
 
-	function FullAdder.ConnectA(source)
-
-		ha1.ConnectA(source)
-
-	end
-
-	function FullAdder.ConnectB(source)
-
-		ha1.ConnectB(source)
-
-	end
-
-	function FullAdder.ConnectCarryIn(source)
-
-		ha2.ConnectB(source)
-
-	end
-
-	Wiring.Connect(
-		ha1.Sum,
-		ha2.Sum
+	halfAdder2.ConnectA(
+		halfAdder1.Sum
 	)
 
 	Wiring.Connect(
-		ha1.Carry,
+		halfAdder1.Carry,
 		carryOr
 	)
 
 	Wiring.Connect(
-		ha2.Carry,
+		halfAdder2.Carry,
 		carryOr
 	)
 
-	return{
+	local function connectA(source)
+		halfAdder1.ConnectA(source)
+	end
 
-		Sum=ha2.Sum,
+	local function connectB(source)
+		halfAdder1.ConnectB(source)
+	end
 
-		Carry=carryOr,
+	local function connectCarryIn(source)
+		halfAdder2.ConnectB(source)
+	end
 
-		ConnectA=FullAdder.ConnectA,
-
-		ConnectB=FullAdder.ConnectB,
-
-		ConnectCarryIn=FullAdder.ConnectCarryIn
-
+	return {
+		Sum = halfAdder2.Sum,
+		Carry = carryOr,
+		ConnectA = connectA,
+		ConnectB = connectB,
+		ConnectCarryIn = connectCarryIn
 	}
-
 end
 
-Context.Modules.FullAdder=FullAdder
+Context.Modules.FullAdder = FullAdder
 
 return FullAdder
