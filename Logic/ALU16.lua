@@ -15,192 +15,253 @@ local function P(origin, x, y, z)
 end
 
 function ALU16.Build(name, origin)
-	local arithmetic = Subtractor16.Build(
+	local self = {}
+
+	self.Arithmetic = Subtractor16.Build(
 		name .. "_ARITHMETIC",
 		P(origin, 0, 0, 0)
 	)
 
-	local andBus = {}
-	local orBus = {}
-	local xorBus = {}
-	local notBus = {}
+	self.AndBus = {}
+	self.OrBus = {}
+	self.XorBus = {}
+	self.NotBus = {}
+	self.Result = {}
 
-	local selectedBus = {}
+	self.SelectArithmetic = {}
+	self.SelectAnd = {}
+	self.SelectOr = {}
+	self.SelectXor = {}
+	self.SelectNot = {}
 
 	for bit = 0, 15 do
-		andBus[bit] = Gates.And(
+		local column = bit % 4
+		local row = math.floor(bit / 4)
+
+		local x = column * 72
+		local z = row * 82
+
+		self.AndBus[bit] = Gates.And(
 			name .. "_AND_" .. bit,
-			P(origin, bit * 6, 0, 40)
+			P(origin, x, 0, z + 34)
 		)
 
-		orBus[bit] = Gates.Or(
+		self.OrBus[bit] = Gates.Or(
 			name .. "_OR_" .. bit,
-			P(origin, bit * 6, 0, 48)
+			P(origin, x, 0, z + 42)
 		)
 
-		xorBus[bit] = Gates.Xor(
+		self.XorBus[bit] = Gates.Xor(
 			name .. "_XOR_" .. bit,
-			P(origin, bit * 6, 0, 56)
+			P(origin, x, 0, z + 50)
 		)
 
-		notBus[bit] = Gates.Not(
+		self.NotBus[bit] = Gates.Not(
 			name .. "_NOT_" .. bit,
-			P(origin, bit * 6, 0, 64)
+			P(origin, x, 0, z + 58)
 		)
 
-		local selectArithmetic = Gates.And(
+		self.SelectArithmetic[bit] = Gates.And(
 			name .. "_SELECT_ARITHMETIC_" .. bit,
-			P(origin, bit * 6, 0, 76)
+			P(origin, x + 18, 0, z + 34)
 		)
 
-		local selectAnd = Gates.And(
+		self.SelectAnd[bit] = Gates.And(
 			name .. "_SELECT_AND_" .. bit,
-			P(origin, bit * 6, 0, 84)
+			P(origin, x + 18, 0, z + 42)
 		)
 
-		local selectOr = Gates.And(
+		self.SelectOr[bit] = Gates.And(
 			name .. "_SELECT_OR_" .. bit,
-			P(origin, bit * 6, 0, 92)
+			P(origin, x + 18, 0, z + 50)
 		)
 
-		local selectXor = Gates.And(
+		self.SelectXor[bit] = Gates.And(
 			name .. "_SELECT_XOR_" .. bit,
-			P(origin, bit * 6, 0, 100)
+			P(origin, x + 18, 0, z + 58)
 		)
 
-		local selectNot = Gates.And(
+		self.SelectNot[bit] = Gates.And(
 			name .. "_SELECT_NOT_" .. bit,
-			P(origin, bit * 6, 0, 108)
+			P(origin, x + 18, 0, z + 66)
 		)
 
-		local output = Gates.Or(
+		self.Result[bit] = Gates.Or(
 			name .. "_RESULT_" .. bit,
-			P(origin, bit * 6, 0, 120)
+			P(origin, x + 36, 0, z + 50)
 		)
 
 		Wiring.Connect(
-			arithmetic.Sum[bit],
-			selectArithmetic
+			self.Arithmetic.Sum[bit],
+			self.SelectArithmetic[bit]
 		)
 
 		Wiring.Connect(
-			andBus[bit],
-			selectAnd
+			self.AndBus[bit],
+			self.SelectAnd[bit]
 		)
 
 		Wiring.Connect(
-			orBus[bit],
-			selectOr
+			self.OrBus[bit],
+			self.SelectOr[bit]
 		)
 
 		Wiring.Connect(
-			xorBus[bit],
-			selectXor
+			self.XorBus[bit],
+			self.SelectXor[bit]
 		)
 
 		Wiring.Connect(
-			notBus[bit],
-			selectNot
+			self.NotBus[bit],
+			self.SelectNot[bit]
 		)
 
-		Wiring.ConnectMany(
-			selectArithmetic,
-			output
+		Wiring.Connect(
+			self.SelectArithmetic[bit],
+			self.Result[bit]
 		)
 
-		Wiring.ConnectMany(
-			selectAnd,
-			output
+		Wiring.Connect(
+			self.SelectAnd[bit],
+			self.Result[bit]
 		)
 
-		Wiring.ConnectMany(
-			selectOr,
-			output
+		Wiring.Connect(
+			self.SelectOr[bit],
+			self.Result[bit]
 		)
 
-		Wiring.ConnectMany(
-			selectXor,
-			output
+		Wiring.Connect(
+			self.SelectXor[bit],
+			self.Result[bit]
 		)
 
-		Wiring.ConnectMany(
-			selectNot,
-			output
+		Wiring.Connect(
+			self.SelectNot[bit],
+			self.Result[bit]
 		)
-
-		selectedBus[bit] = output
 	end
 
-	local zeroFlag = Gates.Not(
-		name .. "_ZERO_FLAG",
-		P(origin, 102, 0, 120)
-	)
+	function self.ConnectABus(bus)
+		assert(
+			type(bus) == "table",
+			"A 입력 버스가 필요합니다."
+		)
 
-	local negativeFlag = selectedBus[15]
-
-	local carryFlag = arithmetic.CarryOut
-
-	function ALU16.ConnectABus(bus)
-		arithmetic.ConnectABus(bus)
+		self.Arithmetic.ConnectABus(bus)
 
 		for bit = 0, 15 do
-			Wiring.Connect(
+			assert(
 				bus[bit],
-				andBus[bit]
+				"A 입력 비트 누락: " .. bit
 			)
 
 			Wiring.Connect(
 				bus[bit],
-				orBus[bit]
+				self.AndBus[bit]
 			)
 
 			Wiring.Connect(
 				bus[bit],
-				xorBus[bit]
+				self.OrBus[bit]
 			)
 
 			Wiring.Connect(
 				bus[bit],
-				notBus[bit]
+				self.XorBus[bit]
+			)
+
+			Wiring.Connect(
+				bus[bit],
+				self.NotBus[bit]
 			)
 		end
 	end
 
-	function ALU16.ConnectBBus(bus)
-		arithmetic.ConnectBBus(bus)
+	function self.ConnectBBus(bus)
+		assert(
+			type(bus) == "table",
+			"B 입력 버스가 필요합니다."
+		)
+
+		self.Arithmetic.ConnectBBus(bus)
 
 		for bit = 0, 15 do
-			Wiring.Connect(
+			assert(
 				bus[bit],
-				andBus[bit]
+				"B 입력 비트 누락: " .. bit
 			)
 
 			Wiring.Connect(
 				bus[bit],
-				orBus[bit]
+				self.AndBus[bit]
 			)
 
 			Wiring.Connect(
 				bus[bit],
-				xorBus[bit]
+				self.OrBus[bit]
+			)
+
+			Wiring.Connect(
+				bus[bit],
+				self.XorBus[bit]
 			)
 		end
 	end
 
-	function ALU16.ConnectSubtract(source)
-		arithmetic.ConnectSubtract(source)
+	function self.ConnectSubtract(source)
+		self.Arithmetic.ConnectSubtract(source)
 	end
 
-	return {
-		Result = selectedBus,
-		Carry = carryFlag,
-		Zero = zeroFlag,
-		Negative = negativeFlag,
+	function self.ConnectSelectArithmetic(source)
+		for bit = 0, 15 do
+			Wiring.Connect(
+				source,
+				self.SelectArithmetic[bit]
+			)
+		end
+	end
 
-		ConnectABus = ALU16.ConnectABus,
-		ConnectBBus = ALU16.ConnectBBus,
-		ConnectSubtract = ALU16.ConnectSubtract
-	}
+	function self.ConnectSelectAnd(source)
+		for bit = 0, 15 do
+			Wiring.Connect(
+				source,
+				self.SelectAnd[bit]
+			)
+		end
+	end
+
+	function self.ConnectSelectOr(source)
+		for bit = 0, 15 do
+			Wiring.Connect(
+				source,
+				self.SelectOr[bit]
+			)
+		end
+	end
+
+	function self.ConnectSelectXor(source)
+		for bit = 0, 15 do
+			Wiring.Connect(
+				source,
+				self.SelectXor[bit]
+			)
+		end
+	end
+
+	function self.ConnectSelectNot(source)
+		for bit = 0, 15 do
+			Wiring.Connect(
+				source,
+				self.SelectNot[bit]
+			)
+		end
+	end
+
+	self.CarryOut = self.Arithmetic.CarryOut
+	self.Negative = self.Result[15]
+
+	return self
 end
 
 Context.Modules.ALU16 = ALU16
